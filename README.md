@@ -1,6 +1,6 @@
 Py Qr Data Exchange
 
-Project that lat's me play with:
+Project that let's me play with:
 - pynacl
 - qrcode
 - tkinter
