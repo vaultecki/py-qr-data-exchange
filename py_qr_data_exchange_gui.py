@@ -1,8 +1,8 @@
 import cv2
 import qrcode
-#from PIL import Image, ImageTk
 import tkinter
-from tkinter import filedialog
+import io
+from tkinter import filedialog, messagebox
 
 import qr_data_class
 
@@ -42,10 +42,10 @@ class GuiClass:
         label2.grid(row=3, column=0, columnspan=4)
 
         self.button_generate = tkinter.Button(self.root, text="Generate QR", command=self.click_button_generate)
-        self.button_generate.grid(row=4, column=1)
+        self.button_generate.grid(row=4, column=2)
 
         self.button_read = tkinter.Button(self.root, text="Read QR", command=self.click_button_read)
-        self.button_read.grid(row=4, column=2)
+        self.button_read.grid(row=4, column=1)
 
     def run(self):
         self.root.mainloop()
@@ -60,18 +60,19 @@ class GuiClass:
     def click_button_generate(self):
         if not self.entry_password.get():
             print("no password")
+            messagebox.showerror("error", "no password set")
             return
         if not self.entry_filename.get():
             print("filename")
+            messagebox.showerror("error", "no file set")
             return
         with (open(self.entry_filename.get(), "rb")) as f_in:
             raw_data = f_in.read()
             qr_data = qr_data_class.QrData(raw_data)
             data_for_img = qr_data.get_string(password=self.entry_password.get())
-            print(data_for_img)
+            # print(data_for_img)
             qr_code_generated = qrcode.make(data_for_img, error_correction=1)
-            file_out = filedialog.asksaveasfilename()
-            qr_code_generated.save("{}".format(file_out))
+            QrWindow(qr_code_generated)
             return
 
     def click_button_filemanager(self):
@@ -82,9 +83,11 @@ class GuiClass:
     def click_button_read(self):
         if not self.entry_password.get():
             print("no password")
+            messagebox.showerror("error", "no password set")
             return
         if not self.entry_filename.get():
             print("filename")
+            messagebox.showerror("error", "no file set")
             return
         image = cv2.imread(self.entry_filename.get())
         # initialize the cv2 QRCode detector
@@ -94,15 +97,38 @@ class GuiClass:
         if vertices_array is None:
             #logger.error("There was some error")
             return
-        print(input_str)
+        # print(input_str)
         qr_data = qr_data_class.QrData()
         qr_data.set_string(input_str, password=self.entry_password.get())
-        print(qr_data.get_data())
+        # print(qr_data.get_data())
         file_out = filedialog.asksaveasfilename()
         if file_out:
             with (open(file_out, "wb+")) as f_out:
                 f_out.write(qr_data.get_data())
 
+class QrWindow:
+    def __init__(self, qr_code_generated):
+        self.qr_window = tkinter.Tk()
+        self.qr_window.title("New Window")
+        #self.qr_window.geometry("250x150")
+        tkinter.Label(self.qr_window, text="Qr Code wurde generiert:").pack()
+
+        self.qr_code_generated = qr_code_generated
+        output = io.BytesIO()
+        qr_code_generated.save(output, format='PNG')
+        self.image_qr = tkinter.PhotoImage(data=output.getvalue(), master=self.qr_window)
+        self.tkinter_qr = tkinter.Label(master=self.qr_window, image=self.image_qr)
+        self.tkinter_qr.pack()
+
+        self.button = tkinter.Button(master=self.qr_window, text="Save As", command=self.save_file)
+        self.button.pack()
+
+        self.qr_window.mainloop()
+
+    def save_file(self):
+        file_out = filedialog.asksaveasfilename()
+        if file_out:
+            self.qr_code_generated.save("{}".format(file_out))
 
 if __name__ == "__main__":
     print("moin")
