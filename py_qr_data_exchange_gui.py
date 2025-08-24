@@ -11,34 +11,51 @@ class GuiClass:
     def __init__(self):
         self.root = tkinter.Tk()
         self.root.title("PyQrDataExchange")
-        self.root.geometry("800x400")
-        self.root.minsize(width=400, height=400)
+        self.root.geometry("900x300")
+        self.root.minsize(width=900, height=300)
         #self.root.maxsize(width=1200, height=800)
         #self.root.resizable(width=False, height=False)
 
-        self.label_password = tkinter.Label(self.root, text="Password [0-20 Zeichen]:")
-        self.label_password.pack()
+        label = tkinter.Label(self.root, text=" ")
+        label.grid(row=0, column=0, columnspan=4)
 
-        self.entry_password = tkinter.Entry(self.root, width=21)
-        self.entry_password.pack()
+        self.label_password = tkinter.Label(self.root, text="Password [1-20]:")
+        self.label_password.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.E)
 
-        self.label_filename = tkinter.Label(self.root, text="Filename")
-        self.label_filename.pack()
+        self.password = tkinter.StringVar(self.root, '')
+        reg = self.root.register(self.entry_password_validate)
+        self.entry_password = tkinter.Entry(self.root, width=21, validate='key',
+                                            validatecommand=(reg, '%P'),
+                                            textvariable=self.password)
+        self.entry_password.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="nw")
 
-        self.entry_filename = tkinter.Entry(self.root, width=40)
-        self.entry_filename.pack()
+        self.label_filename = tkinter.Label(self.root, text="Filename:")
+        self.label_filename.grid(row=2, column=0, padx=5, pady=5, sticky=tkinter.E)
+
+        self.entry_filename = tkinter.Entry(self.root, width=30)
+        self.entry_filename.grid(row=2, column=1, columnspan=2, padx=5, pady=5, sticky="nw")
 
         self.button_filemanager = tkinter.Button(self.root, text="Filemanager", command=self.click_button_filemanager)
-        self.button_filemanager.pack()
+        self.button_filemanager.grid(row=2, column=4)
+
+        label2 = tkinter.Label(self.root, text=" ")
+        label2.grid(row=3, column=0, columnspan=4)
 
         self.button_generate = tkinter.Button(self.root, text="Generate QR", command=self.click_button_generate)
-        self.button_generate.pack()
+        self.button_generate.grid(row=4, column=1)
 
         self.button_read = tkinter.Button(self.root, text="Read QR", command=self.click_button_read)
-        self.button_read.pack()
+        self.button_read.grid(row=4, column=2)
 
     def run(self):
         self.root.mainloop()
+
+    @staticmethod
+    def entry_password_validate(password):
+        max_length = 20
+        if len(password) <= max_length:
+            return True
+        return False
 
     def click_button_generate(self):
         if not self.entry_password.get():
