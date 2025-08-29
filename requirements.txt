@@ -1,3 +1,4 @@
+msgpack-python
 opencv-python
 pillow~=11.3.0
 pyzstd~=0.17.0

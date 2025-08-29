@@ -15,7 +15,7 @@ class GuiClass:
         self.root.geometry("400x150")
         #self.root.minsize(width=400, height=250)
         #self.root.maxsize(width=1200, height=800)
-        self.root.resizable(width=False, height=False)
+        #self.root.resizable(width=False, height=False)
 
         label = tkinter.Label(self.root, text=" ")
         label.grid(row=0, column=0, columnspan=4)

@@ -50,27 +50,34 @@ class EncHelper:
         if self.__password and self.__salt:
             self.__gen_box()
 
-    def encrypt(self, msg):
-        if not isinstance(msg, str):
+    def encrypt(self, msg, encode=True):
+        if not isinstance(msg, str) and not isinstance(msg, bytes):
             #logger.error("msg not a string")
-            raise TypeError("msg should be str")
+            raise TypeError("msg should be str or bytes")
         if not self.__box:
             #logger.error("no key set")
             raise IOError("salt or pw not set")
         #logger.debug("encrpyt msg")
-        encrypted = self.__box.encrypt(msg.encode("utf-8"))
-        return base64.b64encode(encrypted).decode("ascii")
+        encrypted = self.__box.encrypt(msg)
+        if encode:
+            return base64.b64encode(encrypted).decode("ascii")
+        else:
+            return encrypted
 
-    def decrypt(self, msg):
-        if not isinstance(msg, str):
+    def decrypt(self, msg, encode=True):
+        if not isinstance(msg, str) and not isinstance(msg, bytes):
             #logger.error("msg not a string")
-            raise TypeError("msg should be str")
+            raise TypeError("msg should be str or bytes")
         if not self.__box:
             #logger.error("no key set")
             raise IOError("salt or pw not set")
-        encrypted = base64.b64decode(msg)
+        encrypted = msg
+        if isinstance(msg, str):
+            encrypted = base64.b64decode(msg)
         decrypted = self.__box.decrypt(encrypted)
-        return decrypted.decode("utf-8")
+        if encode:
+            return decrypted.decode("utf-8")
+        return decrypted
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
