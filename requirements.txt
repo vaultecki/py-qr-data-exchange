@@ -1,5 +1,5 @@
-opencv-python
-pillow~=11.3.0
-pyzstd~=0.17.0
+opencv-python~=4.12.0.88
 qrcode~=8.2
 PyNaCl~=1.5.0
+msgpack-python~=0.5.6
+pyzstd~=0.17.0

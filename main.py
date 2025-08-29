@@ -1,21 +1,27 @@
 import cv2
+import logging
 import qrcode
 import tkinter
 from tkinter import filedialog, messagebox
 
 import qr_data_class
-
 from extra_windows import QrWindow, ReadWindow
+
+
+logger = logging.getLogger(__name__)
+MAX_QR_CODE_BYTES = 2953
 
 
 class GuiClass:
     def __init__(self):
+        logger.debug("init the gui for py qr data exchange")
         self.root = tkinter.Tk()
         self.root.title("PyQrDataExchange")
         self.root.geometry("400x150")
-        #self.root.minsize(width=400, height=250)
-        #self.root.maxsize(width=1200, height=800)
-        self.root.resizable(width=False, height=False)
+        # to play around with display geometry
+        # self.root.minsize(width=400, height=250)
+        # self.root.maxsize(width=1200, height=800)
+        # self.root.resizable(width=False, height=False)
 
         label = tkinter.Label(self.root, text=" ")
         label.grid(row=0, column=0, columnspan=4)
@@ -61,40 +67,42 @@ class GuiClass:
             return True
         return False
 
+    def _validate_inputs(self, check_filename=True):
+        """Überprüft, ob ein Passwort und optional ein Dateiname eingegeben wurden."""
+        if not self.password.get():
+            logger.error("no password found")
+            messagebox.showerror("Fehler", "Bitte gib ein Passwort ein.")
+            return False
+        if check_filename and not self.entry_filename.get():
+            logger.error("no filename found")
+            messagebox.showerror("Fehler", "Bitte wähle eine Datei aus.")
+            return False
+        return True
+
     def click_button_generate(self):
-        if not self.entry_password.get():
-            print("no password")
-            messagebox.showerror("error", "no password set")
-            return
-        if not self.entry_filename.get():
-            print("filename")
-            messagebox.showerror("error", "no file set")
+        if not self._validate_inputs(check_filename=True):
             return
         with (open(self.entry_filename.get(), "rb")) as f_in:
             raw_data = f_in.read()
-            print("size raw data: {}".format(len(raw_data)))
+            logger.debug("generate qr code")
             qr_data = qr_data_class.QrData(raw_data)
-            data_for_img = qr_data.get_string(password=self.entry_password.get())
-            print("size data_for_img: {}".format(len(data_for_img)))
-            if len(data_for_img) >= 2953:
-                messagebox.showerror("error", "file to big")
+            data_for_img = qr_data.serialize(password=self.entry_password.get())
+            if len(data_for_img) >= MAX_QR_CODE_BYTES:
+                logger.error(f"max size {MAX_QR_CODE_BYTES} for qr code surpassed")
+                messagebox.showerror("Fehler", f"Die Datei ist zu groß. Maximum: {MAX_QR_CODE_BYTES} Bytes.")
             qr_code_generated = qrcode.make(data_for_img, error_correction=1)
-            QrWindow(qr_code_generated, data_for_img)
+            logger.debug("open qr code windowS")
+            QrWindow(self.root, qr_code_generated, data_for_img)
             return
 
     def click_button_filemanager(self):
         file_path = filedialog.askopenfilename()
         if file_path:
+            self.entry_filename.delete(0, tkinter.END)
             self.entry_filename.insert(0, str(file_path))
 
     def click_button_read_qr(self):
-        if not self.entry_password.get():
-            print("no password")
-            messagebox.showerror("error", "no password set")
-            return
-        if not self.entry_filename.get():
-            print("filename")
-            messagebox.showerror("error", "no file set")
+        if not self._validate_inputs(check_filename=True):
             return
         image = cv2.imread(self.entry_filename.get())
         # initialize the cv2 QRCode detector
@@ -104,21 +112,18 @@ class GuiClass:
         if vertices_array is None:
             print("There was some error")
             return
-        ReadWindow(self.entry_password.get(), input_str)
+        ReadWindow(self.root, self.entry_password.get(), input_str)
         return
 
     def click_button_read_string(self):
-        if not self.entry_password.get():
-            print("no password")
-            messagebox.showerror("error", "no password set")
+        if not self._validate_inputs(check_filename=False):
             return
-        ReadWindow(self.entry_password.get())
+        ReadWindow(self.root, self.entry_password.get())
         return
 
 
-
 if __name__ == "__main__":
-    print("moin")
-    # tkinter._test()
-    test = GuiClass()
-    test.run()
+    logging.basicConfig(level=logging.DEBUG)
+    logger.info("start py-qr-data-exchange")
+    py_qr_data_gui = GuiClass()
+    py_qr_data_gui.run()
