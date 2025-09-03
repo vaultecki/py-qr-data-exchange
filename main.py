@@ -82,21 +82,31 @@ class GuiClass:
     def click_button_generate(self):
         if not self._validate_inputs(check_filename=True):
             return
-        with (open(self.entry_filename.get(), "rb")) as f_in:
-            raw_data = f_in.read()
-            logger.debug("generate qr code")
-            qr_data = qr_data_class.QrData(raw_data)
-            data_for_img = qr_data.serialize(password=self.entry_password.get())
-            if len(data_for_img) >= MAX_QR_CODE_BYTES:
-                logger.error(f"max size {MAX_QR_CODE_BYTES} for qr code surpassed")
-                messagebox.showerror("Fehler", f"Die Datei ist zu groß. Maximum: {MAX_QR_CODE_BYTES} Bytes.")
-            qr_code_generated = qrcode.make(data_for_img, error_correction=1)
-            logger.debug("open qr code windowS")
-            QrWindow(self.root, qr_code_generated, data_for_img)
-            return
+        logger.debug(f"read file {self.entry_filename.get()}")
+        try:
+            with (open(self.entry_filename.get(), "rb")) as f_in:
+                raw_data = f_in.read()
+                logger.debug(f"raw file size: {len(raw_data)} Bytes")
+                logger.debug("generate qr code")
+                qr_data = qr_data_class.QrData(raw_data)
+                data_for_img = qr_data.serialize(password=self.entry_password.get())
+                logger.debug(f"size of data for qr code: {len(data_for_img)} Byte")
+                if len(data_for_img) >= MAX_QR_CODE_BYTES:
+                    logger.error(f"max size {MAX_QR_CODE_BYTES} for qr code surpassed")
+                    messagebox.showerror("Fehler", f"Die Datei ist mit {len(data_for_img)} Bytes ist zu groß. Maximum: {MAX_QR_CODE_BYTES} Bytes.")
+                    return
+                qr_code_generated = qrcode.make(data_for_img, error_correction=1)
+                logger.debug("open qr code window")
+                QrWindow(self.root, qr_code_generated, data_for_img)
+        except FileNotFoundError:
+            logger.error(f"file {self.entry_filename.get()} not found")
+            messagebox.showerror("Fehler", f"file {self.entry_filename.get()} not found")
+        return
 
     def click_button_filemanager(self):
-        file_path = filedialog.askopenfilename()
+        logger.debug("open filemanager to chode file")
+        files = [("all files", "*.*"), ("PNG files", "*.png"), ("SVG files", "*.svg")]
+        file_path = filedialog.askopenfilename(filetypes = files, defaultextension = files)
         if file_path:
             self.entry_filename.delete(0, tkinter.END)
             self.entry_filename.insert(0, str(file_path))
@@ -104,20 +114,28 @@ class GuiClass:
     def click_button_read_qr(self):
         if not self._validate_inputs(check_filename=True):
             return
-        image = cv2.imread(self.entry_filename.get())
-        # initialize the cv2 QRCode detector
-        detector = cv2.QRCodeDetector()
-        # detect and decode
-        input_str, vertices_array, binary_qrcode = detector.detectAndDecode(image)
+        logger.debug(f"read file {self.entry_filename.get()}")
+        try:
+            image = cv2.imread(self.entry_filename.get())
+            logger.debug("initialize the cv2 QRCode detector")
+            detector = cv2.QRCodeDetector()
+            logger.debug("cv2 - detect and decode")
+            input_str, vertices_array, binary_qrcode = detector.detectAndDecode(image)
+        except cv2.error:
+            logger.error(f"opencv can not read image {self.entry_filename.get()}")
+            messagebox.showerror("Fehler", f"opencv can not open image {self.entry_filename.get()}")
         if vertices_array is None:
-            print("There was some error")
+            logger.error("no data found in qr code")
+            messagebox.showerror("Fehler", "no data found in qr code")
             return
+        logger.debug(f"open read window with qr text sting {input_str}")
         ReadWindow(self.root, self.entry_password.get(), input_str)
         return
 
     def click_button_read_string(self):
         if not self._validate_inputs(check_filename=False):
             return
+        logger.debug(f"open read window without qr text sting")
         ReadWindow(self.root, self.entry_password.get())
         return
 
