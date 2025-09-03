@@ -31,6 +31,7 @@ class GuiClass:
         reg = self.root.register(self.entry_password_validate)
         self.entry_password = tkinter.Entry(self.root, width=21, validate='key',
                                             validatecommand=(reg, '%P'),
+                                            show='*',
                                             textvariable=self.password)
         self.entry_password.grid(row=1, column=1, padx=5, pady=5, sticky="nw")
 
