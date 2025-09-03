@@ -14,9 +14,9 @@ class EncHelper:
         self.__password = b""
         self.__box = None
         if not salt:
-            logger.debug("generate salt")
             salt_size = nacl.pwhash.argon2i.SALTBYTES
             self.__salt = nacl.utils.random(salt_size)
+            logger.debug(f"generate salt {base64.b64encode(self.__salt).decode("ascii")}")
         else:
             self.set_salt(salt)
         self.set_password(password)
