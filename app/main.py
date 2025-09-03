@@ -1,4 +1,5 @@
 import logging
+import queue
 import threading
 import tkinter
 from tkinter import filedialog, messagebox
@@ -57,6 +58,8 @@ class GuiClass:
         self.button_read = tkinter.Button(self.root, text="Read String", command=self.click_button_read_string)
         self.button_read.grid(row=4, column=1)
 
+        self.result_queue = queue.Queue()
+
     def run(self):
         self.root.mainloop()
 
@@ -82,25 +85,59 @@ class GuiClass:
     def click_button_generate(self):
         if not self._validate_inputs():
             return
-        logger.debug("try generate qr code")
-        t = threading.Thread(target=self.click_button_generate_thread)
-        t.start()
+        logger.debug("button generate qr code clicked")
+        logger.info("1. UI-Feedback geben und Interaktionen sperren")
+        self.button_generate.config(state="disabled")
+        self.root.config(cursor="watch")
+        logger.debug("get filepath and password")
+        filepath = self.entry_filename.get()
+        password = self.entry_password.get()
+        logger.info("2. Worker-Thread starten und ihm die Queue übergeben")
+        threading.Thread(
+            target=self.click_button_generate_thread_worker,
+            args=(filepath, password, self.result_queue),
+            daemon=True
+        ).start()
+        logger.info("3. Den Main-Thread anweisen, die Queue regelmäßig zu prüfen")
+        self.root.after(250, self.process_queue)
 
-    def click_button_generate_thread(self):
+    def click_button_generate_thread_worker(self, filepath, password, q):
         logger.debug("try generate qr code thread")
         try:
-            filepath = self.entry_filename.get()
-            password = self.entry_password.get()
             logger.debug("start compress, encrypt")
             qr_image, qr_text = service.generate_qr_from_file(filepath, password, MAX_QR_CODE_BYTES)
             logger.debug("ended compress, encrypt -> open next window")
-            QrWindow(self.root, qr_image, qr_text)
+            q.put(("success", (qr_image, qr_text)))
         except FileNotFoundError:
-            messagebox.showerror("Fehler", f"Datei nicht gefunden: {filepath}")
+            q.put(("error", FileNotFoundError))
         except service.FileTooLargeError as e:
-            messagebox.showerror("Fehler", str(e))
+            q.put(("error", e))
         except Exception as e:
-            messagebox.showerror("Unerwarteter Fehler", f"Ein Fehler ist aufgetreten: {e}")
+            q.put(("error", e))
+
+    def process_queue(self):
+        """Diese Funktion läuft sicher im Main-Thread."""
+        try:
+            logger.debug("Prüfen, ob etwas in der Queue ist (ohne zu blockieren)")
+            message_type, data = self.result_queue.get_nowait()
+            if message_type == "success":
+                qr_image, qr_text = data
+                QrWindow(self.root, qr_image, qr_text)
+            elif message_type == "error":
+                logger.debug("Jetzt kann die Fehlermeldung sicher angezeigt werden")
+                if isinstance(data, FileNotFoundError):
+                    messagebox.showerror("Fehler", f"Datei nicht gefunden.")
+                elif isinstance(data, service.FileTooLargeError):
+                    messagebox.showerror("Fehler", str(data))
+                else:
+                    messagebox.showerror("Unerwarteter Fehler", f"Ein Fehler ist aufgetreten: {data}")
+
+            logger.info("4. UI-Feedback zurücksetzen, egal ob Erfolg oder Fehler")
+            self.button_generate.config(state="normal")
+            self.root.config(cursor="")
+        except queue.Empty:
+            # Wenn die Queue leer ist, in 100ms erneut prüfen
+            self.root.after(250, self.process_queue)
 
     def click_button_filemanager(self):
         logger.debug("open filemanager to chose file")
