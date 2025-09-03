@@ -88,8 +88,7 @@ class GuiClass:
                 raw_data = f_in.read()
                 logger.debug(f"raw file size: {len(raw_data)} Bytes")
                 logger.debug("generate qr code")
-                qr_data = qr_data_class.QrData(raw_data)
-                data_for_img = qr_data.serialize(password=self.entry_password.get())
+                data_for_img = qr_data_class.QrDataProcessor.serialize(raw_data=raw_data, password=self.entry_password.get())
                 logger.debug(f"size of data for qr code: {len(data_for_img)} Byte")
                 if len(data_for_img) >= MAX_QR_CODE_BYTES:
                     logger.error(f"max size {MAX_QR_CODE_BYTES} for qr code surpassed")

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class EncHelper:
     def __init__(self, password: str="", salt: str=""):
         logger.info("init EncHelper")
-        self.__password = b""
+        self.__password = None
         self.__box = None
         if not salt:
             salt_size = nacl.pwhash.argon2i.SALTBYTES
@@ -24,28 +24,23 @@ class EncHelper:
             self.__gen_box()
 
     def __gen_box(self) -> None:
-        logger.debug("gen key with salt and password")
-        kdf = nacl.pwhash.argon2i.kdf
-        key = kdf(nacl.secret.SecretBox.KEY_SIZE, self.__password, self.__salt)
-        self.__box = nacl.secret.SecretBox(key)
+        if not self.__box:
+            logger.debug("gen key with salt and password")
+            kdf = nacl.pwhash.argon2i.kdf
+            key = kdf(nacl.secret.SecretBox.KEY_SIZE, self.__password, self.__salt)
+            self.__box = nacl.secret.SecretBox(key)
 
     def get_salt(self) -> str:
         logger.debug("get salt")
         return base64.b64encode(self.__salt).decode("ascii")
 
     def set_salt(self, salt:str) -> None:
-        if not isinstance(salt, str):
-            logger.error("salt not a string")
-            raise TypeError("salt should be str")
         logger.debug("set salt")
         self.__salt = base64.b64decode(salt)
         if self.__password and self.__salt:
             self.__gen_box()
 
     def set_password(self, password:str) -> None:
-        if not isinstance(password, str):
-            logger.error("password not a string")
-            raise TypeError("password should be str")
         logger.debug("set password")
         self.__password = password.encode("utf-8")
         if self.__password and self.__salt:

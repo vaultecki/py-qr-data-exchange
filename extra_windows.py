@@ -65,17 +65,18 @@ class ReadWindow(Toplevel):
         self.grab_set()
 
     def save_as(self):
-        qr_data = qr_data_class.QrData()
         try:
-            qr_data.deserialize(self.text_field.get(), password=self.password)
-        except ValueError:
-            logger.error("can not decrypt string")
-            messagebox.showerror("Fehler", "can not decrypt string")
+            qr_data = qr_data_class.QrDataProcessor.deserialize(input_string=self.text_field.get(),
+                                                                password=self.password)
+        except qr_data_class.DecryptionError as e:
+            logger.error(f"can not decrypt string: {e}")
+            messagebox.showerror("Fehler", f"can not decrypt string: {e}")
+            return
         files = [("all files", "*.*")]
         file_out = filedialog.asksaveasfilename(filetypes = files)
         if file_out:
             with (open(file_out, "wb+")) as f_out:
-                f_out.write(qr_data.get_data())
+                f_out.write(qr_data)
 
 
 if __name__ == "__main__":
