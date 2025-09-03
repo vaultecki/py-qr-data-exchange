@@ -38,7 +38,8 @@ class QrWindow(Toplevel):
         self.grab_set()
 
     def save_file(self):
-        file_out = filedialog.asksaveasfilename()
+        files = [("PNG files", "*.png"), ("SVG files", "*.svg")]
+        file_out = filedialog.asksaveasfilename(filetypes = files, defaultextension = ".png")
         if file_out:
             self.qr_code_generated.save("{}".format(file_out))
 
@@ -70,8 +71,8 @@ class ReadWindow(Toplevel):
         except ValueError:
             logger.error("can not decrypt string")
             messagebox.showerror("Fehler", "can not decrypt string")
-        files = [("PNG files", "*.png"), ("SVG files", "*.svg")]
-        file_out = filedialog.asksaveasfilename(filetypes = files, defaultextension = files)
+        files = [("all files", "*.*")]
+        file_out = filedialog.asksaveasfilename(filetypes = files)
         if file_out:
             with (open(file_out, "wb+")) as f_out:
                 f_out.write(qr_data.get_data())

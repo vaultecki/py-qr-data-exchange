@@ -106,7 +106,7 @@ class GuiClass:
     def click_button_filemanager(self):
         logger.debug("open filemanager to chode file")
         files = [("all files", "*.*"), ("PNG files", "*.png"), ("SVG files", "*.svg")]
-        file_path = filedialog.askopenfilename(filetypes = files, defaultextension = files)
+        file_path = filedialog.askopenfilename(filetypes = files)
         if file_path:
             self.entry_filename.delete(0, tkinter.END)
             self.entry_filename.insert(0, str(file_path))
@@ -124,6 +124,7 @@ class GuiClass:
         except cv2.error:
             logger.error(f"opencv can not read image {self.entry_filename.get()}")
             messagebox.showerror("Fehler", f"opencv can not open image {self.entry_filename.get()}")
+            return
         if vertices_array is None:
             logger.error("no data found in qr code")
             messagebox.showerror("Fehler", "no data found in qr code")
