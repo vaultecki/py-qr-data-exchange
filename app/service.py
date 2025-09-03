@@ -1,7 +1,8 @@
 import cv2
 import logging
 import qrcode
-import qr_data_class
+
+from app import qr_data_class
 
 logger = logging.getLogger(__name__)
 

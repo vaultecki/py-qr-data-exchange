@@ -4,7 +4,7 @@ import msgpack
 import nacl.exceptions
 import pyzstd
 
-import crypt_utils
+from app import crypt_utils
 
 logger = logging.getLogger(__name__)
 

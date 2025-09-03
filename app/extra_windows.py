@@ -6,7 +6,7 @@ import tkinter
 import io
 from tkinter import Toplevel, filedialog, messagebox
 
-import qr_data_class
+from app import qr_data_class
 
 logger = logging.getLogger(__name__)
 

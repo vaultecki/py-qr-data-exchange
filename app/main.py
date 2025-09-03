@@ -4,8 +4,8 @@ import threading
 import tkinter
 from tkinter import filedialog, messagebox
 
-import service
-import extra_windows
+from app import service
+from app import extra_windows
 
 
 logger = logging.getLogger(__name__)
