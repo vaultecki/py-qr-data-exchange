@@ -142,7 +142,7 @@ class GuiClass:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     logger.info("start py-qr-data-exchange")
     py_qr_data_gui = GuiClass()
     py_qr_data_gui.run()
