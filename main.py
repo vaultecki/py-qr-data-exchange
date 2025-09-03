@@ -5,6 +5,7 @@ import tkinter
 from tkinter import filedialog, messagebox
 
 import qr_data_class
+import service
 from extra_windows import QrWindow, ReadWindow
 
 
@@ -80,30 +81,23 @@ class GuiClass:
         return True
 
     def click_button_generate(self):
-        if not self._validate_inputs(check_filename=True):
+        if not self._validate_inputs():
             return
-        logger.debug(f"read file {self.entry_filename.get()}")
+        logger.debug("try generate qr code")
         try:
-            with (open(self.entry_filename.get(), "rb")) as f_in:
-                raw_data = f_in.read()
-                logger.debug(f"raw file size: {len(raw_data)} Bytes")
-                logger.debug("generate qr code")
-                data_for_img = qr_data_class.QrDataProcessor.serialize(raw_data=raw_data, password=self.entry_password.get())
-                logger.debug(f"size of data for qr code: {len(data_for_img)} Byte")
-                if len(data_for_img) >= MAX_QR_CODE_BYTES:
-                    logger.error(f"max size {MAX_QR_CODE_BYTES} for qr code surpassed")
-                    messagebox.showerror("Fehler", f"Die Datei ist mit {len(data_for_img)} Bytes ist zu groß. Maximum: {MAX_QR_CODE_BYTES} Bytes.")
-                    return
-                qr_code_generated = qrcode.make(data_for_img, error_correction=1)
-                logger.debug("open qr code window")
-                QrWindow(self.root, qr_code_generated, data_for_img)
+            filepath = self.entry_filename.get()
+            password = self.entry_password.get()
+            qr_image, qr_text = service.generate_qr_from_file(filepath, password, MAX_QR_CODE_BYTES)
+            QrWindow(self.root, qr_image, qr_text)
         except FileNotFoundError:
-            logger.error(f"file {self.entry_filename.get()} not found")
-            messagebox.showerror("Fehler", f"file {self.entry_filename.get()} not found")
-        return
+            messagebox.showerror("Fehler", f"Datei nicht gefunden: {filepath}")
+        except service.FileTooLargeError as e:
+            messagebox.showerror("Fehler", str(e))
+        except Exception as e:
+            messagebox.showerror("Unerwarteter Fehler", f"Ein Fehler ist aufgetreten: {e}")
 
     def click_button_filemanager(self):
-        logger.debug("open filemanager to chode file")
+        logger.debug("open filemanager to chose file")
         files = [("all files", "*.*"), ("PNG files", "*.png"), ("SVG files", "*.svg")]
         file_path = filedialog.askopenfilename(filetypes = files)
         if file_path:
@@ -113,31 +107,23 @@ class GuiClass:
     def click_button_read_qr(self):
         if not self._validate_inputs(check_filename=True):
             return
-        logger.debug(f"read file {self.entry_filename.get()}")
+        filepath = self.entry_filename.get()
+        logger.debug(f"read file {filepath}")
         try:
-            image = cv2.imread(self.entry_filename.get())
-            logger.debug("initialize the cv2 QRCode detector")
-            detector = cv2.QRCodeDetector()
-            logger.debug("cv2 - detect and decode")
-            input_str, vertices_array, binary_qrcode = detector.detectAndDecode(image)
-        except cv2.error:
-            logger.error(f"opencv can not read image {self.entry_filename.get()}")
-            messagebox.showerror("Fehler", f"opencv can not open image {self.entry_filename.get()}")
-            return
-        if vertices_array is None:
-            logger.error("no data found in qr code")
-            messagebox.showerror("Fehler", "no data found in qr code")
-            return
-        logger.debug(f"open read window with qr text sting {input_str}")
-        ReadWindow(self.root, self.entry_password.get(), input_str)
-        return
+            input_str = service.read_qr_from_image(filepath)
+            ReadWindow(self.root, self.entry_password.get(), input_str)
+        except FileNotFoundError:
+            messagebox.showerror("Fehler", f"Datei nicht gefunden: {filepath}")
+        except service.QRCodeNotFoundError as e:
+            messagebox.showerror("Fehler", str(e))
+        except Exception as e:
+            messagebox.showerror("Unerwarteter Fehler", f"Ein Fehler ist aufgetreten: {e}")
 
     def click_button_read_string(self):
         if not self._validate_inputs(check_filename=False):
             return
         logger.debug(f"open read window without qr text sting")
         ReadWindow(self.root, self.entry_password.get())
-        return
 
 
 if __name__ == "__main__":
