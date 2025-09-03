@@ -1,4 +1,5 @@
 import logging
+import threading
 import tkinter
 from tkinter import filedialog, messagebox
 
@@ -56,7 +57,7 @@ class GuiClass:
         self.button_read = tkinter.Button(self.root, text="Read String", command=self.click_button_read_string)
         self.button_read.grid(row=4, column=1)
 
-    def run(self):
+    def run_app(self):
         self.root.mainloop()
 
     @staticmethod
@@ -82,10 +83,17 @@ class GuiClass:
         if not self._validate_inputs():
             return
         logger.debug("try generate qr code")
+        t = threading.Thread(target=self.click_button_generate_thread)
+        t.start()
+
+    def click_button_generate_thread(self):
+        logger.debug("try generate qr code thread")
         try:
             filepath = self.entry_filename.get()
             password = self.entry_password.get()
+            logger.debug("start compress, encrypt")
             qr_image, qr_text = service.generate_qr_from_file(filepath, password, MAX_QR_CODE_BYTES)
+            logger.debug("ended compress, encrypt -> open next window")
             QrWindow(self.root, qr_image, qr_text)
         except FileNotFoundError:
             messagebox.showerror("Fehler", f"Datei nicht gefunden: {filepath}")
@@ -125,7 +133,7 @@ class GuiClass:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     logger.info("start py-qr-data-exchange")
     py_qr_data_gui = GuiClass()
-    py_qr_data_gui.run()
+    py_qr_data_gui.run_app()

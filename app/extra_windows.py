@@ -1,5 +1,6 @@
 import logging
 import math
+import threading
 import tkinter
 import io
 from tkinter import Toplevel, filedialog, messagebox
@@ -17,7 +18,8 @@ class QrWindow(Toplevel):
 
         tkinter.Label(self, text="Qr Code wurde generiert:").grid(row=0, column=0, padx=5, pady=5)
         var_qr_code_text = tkinter.StringVar(self, qr_code_text)
-        tkinter.Entry(self, width=60, textvariable=var_qr_code_text, state="readonly").grid(row=0, column=1, padx=5, pady=5)
+        tkinter.Entry(self, width=60, textvariable=var_qr_code_text, state="readonly").grid(row=0, column=1,
+                                                                                            padx=5, pady=5)
 
         self.qr_code_generated = qr_code_generated
 
@@ -59,20 +61,29 @@ class ReadWindow(Toplevel):
             self.text_field = tkinter.Entry(self, width=60)
         self.text_field.grid(row=0, column=1, padx=5, pady=5)
 
-        tkinter.Button(self, text="Decrypt and Save as", command=self.save_as).grid(row=1, column=1, padx=5, pady=5)
+        tkinter.Button(self, text="Decrypt and Save as", command=self.on_click_decrypt).grid(row=1, column=1,
+                                                                                             padx=5, pady=5)
 
         self.transient(master)
         self.grab_set()
 
-    def save_as(self):
+    def on_click_decrypt(self):
+        logger.debug("button presses")
+        t = threading.Thread(target=self.on_click_decrypt_thread)
+        t.start()
+
+    def on_click_decrypt_thread(self):
         try:
+            logger.debug("start decryption, decompressing")
             qr_data = qr_data_class.QrDataProcessor.deserialize(input_string=self.text_field.get(),
                                                                 password=self.password)
+            logger.debug("ended decryption, decompressing")
         except qr_data_class.DecryptionError as e:
             logger.error(f"can not decrypt string: {e}")
             messagebox.showerror("Fehler", f"can not decrypt string: {e}")
             return
         files = [("all files", "*.*")]
+        logger.debug("open file dialog")
         file_out = filedialog.asksaveasfilename(filetypes = files)
         if file_out:
             with (open(file_out, "wb+")) as f_out:
