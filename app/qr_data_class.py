@@ -19,7 +19,7 @@ class QrDataProcessor:
         compressed_dat = pyzstd.compress(raw_data, 16)
         enc_msg = crypt_utils.CryptoUtils.encrypt(data=compressed_dat, key=key)
 
-        packed_data = msgpack.packb({"salt": salt, "data": enc_msg})
+        packed_data = msgpack.packb([salt, enc_msg])
         return base64.b64encode(packed_data).decode("ascii")
 
     @staticmethod
@@ -27,10 +27,10 @@ class QrDataProcessor:
         """Nimmt einen QR-String und ein Passwort und gibt die Rohdaten zurück."""
         try:
             unpacked_data = msgpack.unpackb(base64.b64decode(input_string))
-            salt = unpacked_data.get(b"salt", b"")
+            salt = unpacked_data[0]
 
             key = crypt_utils.CryptoUtils.derive_key(password=password, salt=salt)
-            dec_msg = crypt_utils.CryptoUtils.decrypt(encrypted_data=unpacked_data.get(b"data", b""),
+            dec_msg = crypt_utils.CryptoUtils.decrypt(encrypted_data=unpacked_data[1],
                                                       key=key)
             return pyzstd.decompress(dec_msg)
         except (msgpack.UnpackException, nacl.exceptions.CryptoError, ValueError) as e:
