@@ -15,9 +15,9 @@ class QrWindow(Toplevel):
         logger.info("open qr code display window")
         self.title("Generierter QR-Code")
 
-        tkinter.Label(self, text="Qr Code wurde generiert:").grid(row=0, column=0)
+        tkinter.Label(self, text="Qr Code wurde generiert:").grid(row=0, column=0, padx=5, pady=5)
         var_qr_code_text = tkinter.StringVar(self, qr_code_text)
-        tkinter.Entry(self, width=60, textvariable=var_qr_code_text, state="readonly").grid(row=0, column=1)
+        tkinter.Entry(self, width=60, textvariable=var_qr_code_text, state="readonly").grid(row=0, column=1, padx=5, pady=5)
 
         self.qr_code_generated = qr_code_generated
 
@@ -29,10 +29,10 @@ class QrWindow(Toplevel):
 
         self.image_qr = tkinter.PhotoImage(data=output.getvalue(), master=self)
         self.tkinter_qr = tkinter.Label(master=self, image=self.image_qr)
-        self.tkinter_qr.grid(row=1, column=0, columnspan=2)
+        self.tkinter_qr.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
 
         self.button = tkinter.Button(master=self, text="Save As", command=self.save_file)
-        self.button.grid(row=2, column=0, columnspan=2)
+        self.button.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
 
         self.transient(master)
         self.grab_set()
@@ -56,7 +56,7 @@ class ReadWindow(Toplevel):
             self.text_field = tkinter.Entry(self, textvariable=text, width=60, state="readonly")
         else:
             self.text_field = tkinter.Entry(self, width=60)
-        self.text_field.grid(row=0, column=1)
+        self.text_field.grid(row=0, column=1, padx=5, pady=5)
 
         tkinter.Button(self, text="Decrypt and Save as", command=self.save_as).grid(row=1, column=1, padx=5, pady=5)
 
@@ -65,8 +65,13 @@ class ReadWindow(Toplevel):
 
     def save_as(self):
         qr_data = qr_data_class.QrData()
-        qr_data.deserialize(self.text_field.get(), password=self.password)
-        file_out = filedialog.asksaveasfilename()
+        try:
+            qr_data.deserialize(self.text_field.get(), password=self.password)
+        except ValueError:
+            logger.error("can not decrypt string")
+            messagebox.showerror("Fehler", "can not decrypt string")
+        files = [("PNG files", "*.png"), ("SVG files", "*.svg")]
+        file_out = filedialog.asksaveasfilename(filetypes = files, defaultextension = files)
         if file_out:
             with (open(file_out, "wb+")) as f_out:
                 f_out.write(qr_data.get_data())
