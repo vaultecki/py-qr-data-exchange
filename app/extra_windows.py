@@ -71,7 +71,7 @@ class ReadWindow(Toplevel):
         self.grab_set()
 
     def on_click_decrypt(self):
-        logger.debug("button presses")
+        logger.debug("button pressed")
         self.button.config(state="disabled")
         self.config(cursor="watch")
         input_str = self.text_field.get()

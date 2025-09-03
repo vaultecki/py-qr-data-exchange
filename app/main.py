@@ -177,5 +177,5 @@ def run_app():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    logger.info("start py-qr-data-exchange")
+    logger.info("start main")
     run_app()
