@@ -57,7 +57,7 @@ class GuiClass:
         self.button_read = tkinter.Button(self.root, text="Read String", command=self.click_button_read_string)
         self.button_read.grid(row=4, column=1)
 
-    def run_app(self):
+    def run(self):
         self.root.mainloop()
 
     @staticmethod
@@ -132,8 +132,13 @@ class GuiClass:
         ReadWindow(self.root, self.entry_password.get())
 
 
+def run_app():
+    logger.info("start py-qr-data-exchange")
+    py_qr_data_gui = GuiClass()
+    py_qr_data_gui.run()
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     logger.info("start py-qr-data-exchange")
-    py_qr_data_gui = GuiClass()
-    py_qr_data_gui.run_app()
+    run_app()
