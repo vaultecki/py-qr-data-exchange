@@ -4,22 +4,22 @@ import msgpack
 import nacl.exceptions
 import pyzstd
 
-import helper
+import crypt_utils
 
 logger = logging.getLogger(__name__)
 
 
-class QrDataProcessor: # Umbenannt für mehr Klarheit
+class QrDataProcessor:
     @staticmethod
     def serialize(raw_data: bytes, password: str) -> str:
         """Nimmt Rohdaten und ein Passwort und gibt den QR-String zurück."""
-        enc_helper = helper.EncHelper(password=password)
-        salt = enc_helper.get_salt()
+        salt = crypt_utils.CryptoUtils.generate_salt()
+        key = crypt_utils.CryptoUtils.derive_key(password=password, salt=salt)
 
         compressed_dat = pyzstd.compress(raw_data, 16)
-        enc_msg = enc_helper.encrypt(compressed_dat, encode=False)
+        enc_msg = crypt_utils.CryptoUtils.encrypt(data=compressed_dat, key=key)
 
-        packed_data = msgpack.packb({"salt": base64.b64decode(salt), "data": enc_msg})
+        packed_data = msgpack.packb({"salt": salt, "data": enc_msg})
         return base64.b64encode(packed_data).decode("ascii")
 
     @staticmethod
@@ -27,11 +27,11 @@ class QrDataProcessor: # Umbenannt für mehr Klarheit
         """Nimmt einen QR-String und ein Passwort und gibt die Rohdaten zurück."""
         try:
             unpacked_data = msgpack.unpackb(base64.b64decode(input_string))
-            salt = base64.b64encode(unpacked_data.get(b"salt", b"")).decode("ascii")
+            salt = unpacked_data.get(b"salt", b"")
 
-            enc_helper = helper.EncHelper(password=password, salt=salt)
-
-            dec_msg = enc_helper.decrypt(unpacked_data.get(b"data", b""), encode=False)
+            key = crypt_utils.CryptoUtils.derive_key(password=password, salt=salt)
+            dec_msg = crypt_utils.CryptoUtils.decrypt(encrypted_data=unpacked_data.get(b"data", b""),
+                                                      key=key)
             return pyzstd.decompress(dec_msg)
         except (msgpack.UnpackException, nacl.exceptions.CryptoError, ValueError) as e:
             # Fange spezifische Fehler ab und werfe eine eigene, klare Exception

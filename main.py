@@ -1,10 +1,7 @@
-import cv2
 import logging
-import qrcode
 import tkinter
 from tkinter import filedialog, messagebox
 
-import qr_data_class
 import service
 from extra_windows import QrWindow, ReadWindow
 
