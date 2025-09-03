@@ -5,7 +5,7 @@ import tkinter
 from tkinter import filedialog, messagebox
 
 import service
-from extra_windows import QrWindow, ReadWindow
+import extra_windows
 
 
 logger = logging.getLogger(__name__)
@@ -122,7 +122,7 @@ class GuiClass:
             message_type, data = self.result_queue.get_nowait()
             if message_type == "success":
                 qr_image, qr_text = data
-                QrWindow(self.root, qr_image, qr_text)
+                extra_windows.QrWindow(self.root, qr_image, qr_text)
             elif message_type == "error":
                 logger.debug("Jetzt kann die Fehlermeldung sicher angezeigt werden")
                 if isinstance(data, FileNotFoundError):
@@ -154,7 +154,7 @@ class GuiClass:
         logger.debug(f"read file {filepath}")
         try:
             input_str = service.read_qr_from_image(filepath)
-            ReadWindow(self.root, self.entry_password.get(), input_str)
+            extra_windows.ReadWindow(self.root, self.entry_password.get(), input_str)
         except FileNotFoundError:
             messagebox.showerror("Fehler", f"Datei nicht gefunden: {filepath}")
         except service.QRCodeNotFoundError as e:
@@ -166,7 +166,7 @@ class GuiClass:
         if not self._validate_inputs(check_filename=False):
             return
         logger.debug(f"open read window without qr text sting")
-        ReadWindow(self.root, self.entry_password.get())
+        extra_windows.ReadWindow(self.root, self.entry_password.get())
 
 
 def run_app():
