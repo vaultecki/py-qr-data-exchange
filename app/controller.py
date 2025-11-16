@@ -1,4 +1,6 @@
-# controller.py
+# Copyright [2025] [ecki]
+# SPDX-License-Identifier: Apache-2.0
+
 import threading
 import logging
 from typing import Callable
