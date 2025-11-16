@@ -183,6 +183,12 @@ class QrWindow(Toplevel):
                 filename = f"qr_part_{i}_of_{len(self.qr_codes)}.png"
                 filepath = os.path.join(directory, filename)
                 qr_image.save(filepath)
+            for i, qr_string in enumerate(self.qr_texts, 1):
+                filename = f"qr_part_{i}_of_{len(self.qr_codes)}.txt"
+                filepath = os.path.join(directory, filename)
+                with open(filepath, "w") as text_file:
+                    text_file.write(qr_string)
+                    text_file.close()
 
             messagebox.showinfo("Success",
                                 f"{len(self.qr_codes)} QR codes saved to:\n{directory}")
@@ -278,6 +284,20 @@ class ReadWindow(Toplevel):
                 self.config(cursor="")
                 return
             input_data = input_str
+
+            if len(input_str) > 2953 and "==" in input_str:
+                logger.debug("probably multipart string")
+                input_array = input_str.lstrip().rstrip().split("==")
+                self.qr_texts = []
+                for part in input_array:
+                    part = part.lstrip().rstrip() + "=="
+                    self.qr_texts.append(part)
+                    from app.controller import QrExchangeController
+                    if QrExchangeController.is_multipart_qr(part):
+                        part_num, total = QrExchangeController.get_multipart_info(part)
+                        info = f"Part {part_num}/{total}"
+                        logger.debug(info)
+                input_data = self.qr_texts
 
         threading.Thread(
             target=self.on_click_decrypt_thread_worker,
