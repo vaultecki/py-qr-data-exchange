@@ -112,7 +112,6 @@ base64(msgpack({
     'v': 1,              # Version
     'p': part_number,    # e.g. 1, 2, 3, ...
     't': total_parts,    # e.g. 5
-    'h': file_hash,      # SHA256 of original file
     'd': data_chunk      # Part of encrypted data
 }))
 ```
