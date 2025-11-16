@@ -3,10 +3,12 @@
 
 import logging
 import math
+import time
+import os
 
 import msgpack
 import base64
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
 from app import qr_data_class
@@ -44,7 +46,8 @@ class MultiPartQrProcessor:
         return chunks
 
     @staticmethod
-    def serialize_multipart(raw_data: bytes, password: str, max_qr_bytes: int) -> List[str]:
+    def serialize_multipart(raw_data: bytes, password: str, max_qr_bytes: int,
+                            file_name: Optional[str] = None) -> List[str]:
         """
         Splits large files into multiple QR codes.
 
@@ -52,12 +55,23 @@ class MultiPartQrProcessor:
             raw_data: The raw file data
             password: Password for encryption
             max_qr_bytes: Maximum size per QR code
+            file_name: Optional filename to include in metadata
 
         Returns:
             List of QR code strings
         """
         file_hash = MultiPartQrProcessor.calculate_file_hash(raw_data)
-        data = msgpack.packb({'d': raw_data, 'h': file_hash})
+
+        # Extract just the filename without path if provided
+        if file_name:
+            file_name = os.path.basename(file_name)
+
+        data = msgpack.packb({
+            'd': raw_data,
+            'h': file_hash,
+            'n': file_name,
+            't': time.time()
+        })
 
         # Compress and encrypt the entire file once
         encrypted_string = qr_data_class.QrDataProcessor.serialize(data, password)
@@ -72,7 +86,7 @@ class MultiPartQrProcessor:
         chunks = MultiPartQrProcessor.split_data(encrypted_bytes, max_data_per_qr)
         total_parts = len(chunks)
 
-        logger.info(f"File will be split into {total_parts} QR codes")
+        logger.info(f"File '{file_name}' will be split into {total_parts} QR codes")
 
         qr_strings = []
         for i, chunk in enumerate(chunks, start=1):
@@ -100,7 +114,7 @@ class MultiPartQrProcessor:
         return qr_strings
 
     @staticmethod
-    def deserialize_multipart(qr_strings: List[str], password: str) -> bytes:
+    def deserialize_multipart(qr_strings: List[str], password: str) -> Tuple[bytes, Optional[str], Optional[float]]:
         """
         Reassembles multiple QR code strings back to original data.
 
@@ -109,7 +123,7 @@ class MultiPartQrProcessor:
             password: Password for decryption
 
         Returns:
-            The restored raw data
+            Tuple of (raw_data, filename, timestamp)
         """
         if not qr_strings:
             raise ValueError("No QR codes provided")
@@ -164,15 +178,17 @@ class MultiPartQrProcessor:
         unpacked_data = msgpack.unpackb(data)
         file_hash = unpacked_data['h']
         raw_data = unpacked_data['d']
+        file_name = unpacked_data.get('n', None)
+        timestamp = unpacked_data.get('t', None)
 
         # Validate hash
         reconstructed_hash = MultiPartQrProcessor.calculate_file_hash(raw_data)
         if reconstructed_hash != file_hash:
             raise ValueError("Hash validation failed - data is corrupt")
 
-        logger.info("File successfully restored and validated")
+        logger.info(f"File '{file_name}' successfully restored and validated")
 
-        return raw_data
+        return raw_data, file_name, timestamp
 
     @staticmethod
     def is_multipart_qr(qr_string: str) -> bool:
@@ -208,11 +224,14 @@ if __name__ == "__main__":
     # Test with small data
     password = "test123"
     test_data = b"Hello World! " * 1000  # ~13KB
+    test_filename = "test_document.pdf"
 
     logger.info(f"Original data: {len(test_data)} bytes")
 
     # Split into very small QR codes (for testing only)
-    qr_strings = MultiPartQrProcessor.serialize_multipart(test_data, password, max_qr_bytes=500)
+    qr_strings = MultiPartQrProcessor.serialize_multipart(
+        test_data, password, max_qr_bytes=500, file_name=test_filename
+    )
     logger.info(f"Created {len(qr_strings)} QR codes")
 
     # Check if multi-part
@@ -222,9 +241,12 @@ if __name__ == "__main__":
         logger.info(f"QR {i}: Multi-Part={is_multi}, Part {part_num}/{total}")
 
     # Reassemble
-    restored = MultiPartQrProcessor.deserialize_multipart(qr_strings, password)
+    restored, filename, timestamp = MultiPartQrProcessor.deserialize_multipart(qr_strings, password)
     logger.info(f"Restored: {len(restored)} bytes")
+    logger.info(f"Filename: {filename}")
+    logger.info(f"Timestamp: {timestamp}")
 
     # Validation
     assert test_data == restored, "Data doesn't match!"
+    assert filename == test_filename, "Filename doesn't match!"
     logger.info("✓ Test successful!")

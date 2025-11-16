@@ -3,7 +3,8 @@
 
 import logging
 import qrcode
-from typing import List, Tuple, Union
+import os
+from typing import List, Tuple, Union, Optional
 from PIL import Image
 
 from app import qr_data_class
@@ -48,8 +49,12 @@ def generate_qr_from_file(filepath: str, password: str, max_bytes: int) -> Union
 
     # File is too large -> multi-part
     logger.info("File too large for single QR code, using multi-part")
+
+    # Extract filename from filepath
+    file_name = os.path.basename(filepath)
+
     qr_strings = qr_multi_part.MultiPartQrProcessor.serialize_multipart(
-        raw_data, password, max_bytes
+        raw_data, password, max_bytes, file_name=file_name
     )
 
     images = []
@@ -160,7 +165,7 @@ def get_multipart_info(qr_text: str) -> Tuple[int, int]:
     return qr_multi_part.MultiPartQrProcessor.get_part_info(qr_text)
 
 
-def decrypt_qr_data(qr_texts: Union[str, List[str]], password: str) -> bytes:
+def decrypt_qr_data(qr_texts: Union[str, List[str]], password: str) -> Tuple[bytes, Optional[str], Optional[float]]:
     """
     Decrypts QR data (single-part or multi-part).
 
@@ -169,7 +174,8 @@ def decrypt_qr_data(qr_texts: Union[str, List[str]], password: str) -> bytes:
         password: Password for decryption
 
     Returns:
-        Decrypted raw data
+        Tuple of (raw_data, filename, timestamp)
+        For single-part QR codes, filename and timestamp will be None
     """
     # Normalize input to list
     if isinstance(qr_texts, str):
@@ -188,7 +194,8 @@ def decrypt_qr_data(qr_texts: Union[str, List[str]], password: str) -> bytes:
             logger.warning(f"Multiple QR codes provided, but first is not multi-part. Using only the first.")
 
         logger.info("Single-part QR code detected")
-        return qr_data_class.QrDataProcessor.deserialize(qr_texts[0], password)
+        raw_data = qr_data_class.QrDataProcessor.deserialize(qr_texts[0], password)
+        return raw_data, None, None
 
 
 if __name__ == "__main__":
@@ -230,12 +237,11 @@ if __name__ == "__main__":
                 os.unlink(test_qr_path)
 
             # Decrypt
-            restored = decrypt_qr_data(texts, test_password)
+            restored, filename, timestamp = decrypt_qr_data(texts, test_password)
             assert restored == test_data
-            logger.info("✓ Multi-part test successful!")
+            logger.info(f"✓ Multi-part test successful! Filename: {filename}")
         else:
             logger.info("Single-part QR code created")
     finally:
         import os
-
         os.unlink(temp_path)

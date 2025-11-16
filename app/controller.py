@@ -3,7 +3,7 @@
 
 import threading
 import logging
-from typing import Callable, Union, List
+from typing import Callable, Union, List, Tuple, Optional
 from PIL import Image
 
 from app import service
@@ -82,10 +82,13 @@ class QrExchangeController:
         threading.Thread(target=worker, daemon=True).start()
 
     @staticmethod
-    def decrypt_qr_data(qr_texts: Union[str, List[str]], password: str) -> bytes:
+    def decrypt_qr_data(qr_texts: Union[str, List[str]], password: str) -> Tuple[bytes, Optional[str], Optional[float]]:
         """
         Pure business logic: no thread needed, called from UI thread.
         Supports single-part and multi-part QR codes.
+
+        Returns:
+            Tuple of (raw_data, filename, timestamp)
         """
         try:
             return service.decrypt_qr_data(qr_texts, password)

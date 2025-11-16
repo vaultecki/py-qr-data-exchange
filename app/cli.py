@@ -148,13 +148,26 @@ def read_qr(args):
 
             from app import qr_data_class
             try:
-                raw_data = service.decrypt_qr_data(qr_texts, password)
+                raw_data, filename, timestamp = service.decrypt_qr_data(qr_texts, password)
+
                 output_file = Path(args.output)
+
+                # If output is a directory, use suggested filename
+                if output_file.is_dir() and filename:
+                    output_file = output_file / filename
+                    logger.info(f"Using suggested filename: {filename}")
 
                 with open(output_file, 'wb') as f:
                     f.write(raw_data)
 
                 logger.info(f"File successfully decrypted and saved: {output_file}")
+
+                # Show timestamp if available
+                if timestamp:
+                    import time
+                    timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+                    logger.info(f"Original file created: {timestamp_str}")
+
                 return 0
 
             except qr_data_class.DecryptionError as e:
@@ -216,13 +229,26 @@ def decrypt_text(args):
 
     from app import qr_data_class
     try:
-        raw_data = service.decrypt_qr_data(qr_texts, password)
+        raw_data, filename, timestamp = service.decrypt_qr_data(qr_texts, password)
+
         output_file = Path(args.output)
+
+        # If output is a directory, use suggested filename
+        if output_file.is_dir() and filename:
+            output_file = output_file / filename
+            logger.info(f"Using suggested filename: {filename}")
 
         with open(output_file, 'wb') as f:
             f.write(raw_data)
 
         logger.info(f"File successfully decrypted and saved: {output_file}")
+
+        # Show timestamp if available
+        if timestamp:
+            import time
+            timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+            logger.info(f"Original file created: {timestamp_str}")
+
         return 0
 
     except qr_data_class.DecryptionError as e:
@@ -317,7 +343,7 @@ Examples:
     )
     read_parser.add_argument(
         '-o', '--output',
-        help='Output file (automatically decrypts if provided)'
+        help='Output file (automatically decrypts if provided). Can be a directory, filename will be suggested.'
     )
     read_parser.add_argument(
         '-p', '--password',
@@ -346,7 +372,7 @@ Examples:
     decrypt_parser.add_argument(
         '-o', '--output',
         required=True,
-        help='Output file'
+        help='Output file. Can be a directory, filename will be suggested.'
     )
     decrypt_parser.add_argument(
         '-p', '--password',

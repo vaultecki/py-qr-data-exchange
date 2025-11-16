@@ -200,6 +200,7 @@ class ReadWindow(Toplevel):
         logger.info("open qr read window")
         self.password = password
         self.qr_texts = []  # List for multi-part QR codes
+        self.suggested_filename = None  # Store suggested filename
 
         self.title("QR Data Read")
 
@@ -310,6 +311,7 @@ class ReadWindow(Toplevel):
     def clear_qr_list(self):
         """Clears the list of QR codes."""
         self.qr_texts = []
+        self.suggested_filename = None
         self.multipart_label.config(text="0 QR codes loaded")
         logger.info("QR code list cleared")
 
@@ -355,12 +357,12 @@ class ReadWindow(Toplevel):
         try:
             logger.debug("start decryption, decompressing")
             from app.controller import QrExchangeController
-            qr_data = QrExchangeController.decrypt_qr_data(
+            raw_data, filename, timestamp = QrExchangeController.decrypt_qr_data(
                 qr_texts=input_data,
                 password=password
             )
-            logger.debug("ended decryption, decompressing")
-            q.put(("success", qr_data))
+            logger.debug(f"ended decryption, decompressing. Filename: {filename}")
+            q.put(("success", (raw_data, filename, timestamp)))
         except qr_data_class.DecryptionError as e:
             logger.error(f"cannot decrypt string: {e}")
             q.put(("error", e))
@@ -374,13 +376,33 @@ class ReadWindow(Toplevel):
             logger.debug("Checking if something is in the queue (non-blocking)")
             message_type, data = self.result_queue.get_nowait()
             if message_type == "success":
+                raw_data, filename, timestamp = data
+
                 files = [("all files", "*.*")]
                 logger.debug("open file dialog")
-                file_out = filedialog.asksaveasfilename(filetypes=files)
+
+                # Use suggested filename if available
+                if filename:
+                    logger.info(f"Using suggested filename: {filename}")
+                    file_out = filedialog.asksaveasfilename(
+                        filetypes=files,
+                        initialfile=filename
+                    )
+                else:
+                    file_out = filedialog.asksaveasfilename(filetypes=files)
+
                 if file_out:
                     with open(file_out, "wb+") as f_out:
-                        f_out.write(data)
-                    messagebox.showinfo("Success", f"File saved: {file_out}")
+                        f_out.write(raw_data)
+
+                    # Create success message with timestamp if available
+                    success_msg = f"File saved: {file_out}"
+                    if timestamp:
+                        import time
+                        timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+                        success_msg += f"\n\nOriginal file created: {timestamp_str}"
+
+                    messagebox.showinfo("Success", success_msg)
             elif message_type == "error":
                 logger.debug("Now the error message can be displayed safely")
                 if isinstance(data, qr_data_class.DecryptionError):
@@ -397,4 +419,3 @@ class ReadWindow(Toplevel):
 
 if __name__ == "__main__":
     logger.info("main of extra_window.py")
-    
