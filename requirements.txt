@@ -1,3 +1,5 @@
+msgpack-python
+pillow
 opencv-python-headless
 qrcode[pil]
 pynacl
