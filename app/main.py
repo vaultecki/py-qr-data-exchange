@@ -44,7 +44,7 @@ class GuiClass:
         self.entry_filename.grid(row=2, column=1, padx=5, pady=5, sticky="nw")
 
         self.button_filemanager = tkinter.Button(
-            self.root, text="Filemanager",
+            self.root, text="Browse",
             command=self.click_button_filemanager
         )
         self.button_filemanager.grid(row=2, column=2)
@@ -76,10 +76,10 @@ class GuiClass:
 
     def _validate_inputs(self, check_filename=True):
         if not self.password_var.get():
-            messagebox.showerror("Fehler", "Bitte gib ein Passwort ein.")
+            messagebox.showerror("Error", "Please enter a password.")
             return False
         if check_filename and not self.entry_filename.get():
-            messagebox.showerror("Fehler", "Bitte wähle eine Datei aus.")
+            messagebox.showerror("Error", "Please select a file.")
             return False
         return True
 
@@ -105,7 +105,7 @@ class GuiClass:
 
     def _on_generate_error(self, error: Exception):
         self._enable_ui()
-        messagebox.showerror("Fehler", str(error))
+        messagebox.showerror("Error", str(error))
 
     def click_button_filemanager(self):
         filetypes = [("all files", "*.*"), ("PNG files", "*.png")]
@@ -124,7 +124,7 @@ class GuiClass:
         self.controller.read_qr_from_image_async(
             filepath,
             on_success=lambda text: extra_windows.ReadWindow(self.root, password, text),
-            on_error=lambda err: messagebox.showerror("Fehler", str(err))
+            on_error=lambda err: messagebox.showerror("Error", str(err))
         )
 
     def click_button_read_string(self):

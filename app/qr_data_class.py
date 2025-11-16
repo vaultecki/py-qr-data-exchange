@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class QrDataProcessor:
     @staticmethod
     def serialize(raw_data: bytes, password: str) -> str:
-        """Nimmt Rohdaten und ein Passwort und gibt den QR-String zurück."""
+        """Takes raw data and a password and returns the QR string."""
         salt = crypt_utils.CryptoUtils.generate_salt()
         key = crypt_utils.CryptoUtils.derive_key(password=password, salt=salt)
 
@@ -27,7 +27,7 @@ class QrDataProcessor:
 
     @staticmethod
     def deserialize(input_string: str, password: str) -> bytes:
-        """Nimmt einen QR-String und ein Passwort und gibt die Rohdaten zurück."""
+        """Takes a QR string and a password and returns the raw data."""
         try:
             unpacked_data = msgpack.unpackb(base64.b64decode(input_string))
             salt = unpacked_data[0]
@@ -37,17 +37,19 @@ class QrDataProcessor:
                                                       key=key)
             return pyzstd.decompress(dec_msg)
         except (msgpack.UnpackException, nacl.exceptions.CryptoError, ValueError) as e:
-            # Fange spezifische Fehler ab und werfe eine eigene, klare Exception
-            raise DecryptionError("Entschlüsselung fehlgeschlagen. Falsches Passwort oder korrupte Daten.") from e
+            # Catch specific errors and raise a clear custom exception
+            raise DecryptionError("Decryption failed. Wrong password or corrupted data.") from e
+
 
 class DecryptionError(Exception):
     pass
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     logger.info("main of file qr_data_class")
     password = "test"
-    raw_data = b"moin"
+    raw_data = b"hello"
     logger.debug(f"raw data is: {raw_data}")
     qr_data = QrDataProcessor.serialize(raw_data, password)
     logger.debug(f"packed and encrypted data: {qr_data}")
