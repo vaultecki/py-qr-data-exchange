@@ -6,7 +6,6 @@ import logging
 import sys
 import getpass
 from pathlib import Path
-from typing import List
 
 from app import service
 
@@ -147,8 +146,8 @@ def read_qr(args):
                 logger.error("Password cannot be empty.")
                 return 1
 
+            from app import qr_data_class
             try:
-                from app import qr_data_class
                 raw_data = service.decrypt_qr_data(qr_texts, password)
                 output_file = Path(args.output)
 
@@ -215,8 +214,8 @@ def decrypt_text(args):
         logger.error("Password cannot be empty.")
         return 1
 
+    from app import qr_data_class
     try:
-        from app import qr_data_class
         raw_data = service.decrypt_qr_data(qr_texts, password)
         output_file = Path(args.output)
 

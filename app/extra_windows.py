@@ -3,7 +3,6 @@
 
 import logging
 import math
-import pprint
 import queue
 import threading
 import tkinter
