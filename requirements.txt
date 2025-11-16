@@ -1,19 +1,19 @@
-# PyQrDataExchange - Development Requirements
-# Includes all dependencies plus development and testing tools
+# PyQrDataExchange Requirements
+# Core dependencies for QR code generation and encryption
 
-# Base requirements
--r requirements.txt
+# Image processing and QR code generation
+Pillow>=10.0.0
+qrcode>=7.4.0
 
-# Testing
-pytest>=7.4.0
-pytest-cov>=4.1.0
-pytest-timeout>=2.1.0
+# QR code reading (qreader recommended, opencv-python as fallback)
+qreader>=3.0.0
+opencv-python>=4.8.0
 
-# Code quality
-pylint>=3.0.0
-flake8>=6.0.0
-black>=23.0.0
-mypy>=1.5.0
+# Cryptography
+PyNaCl>=1.5.0
 
-# Type stubs
-types-Pillo
+# Data serialization
+msgpack>=1.0.0
+
+# Compression
+pyzstd>=0.15.0

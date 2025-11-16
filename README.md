@@ -140,11 +140,16 @@ python -m app.cli read -i qrcode.png -o restored.txt
 1. **Enter password**
 2. **Click "Read String"**
 3. **Add QR codes**:
-   - Click "Add QR Code Image" to load each part
+   - Click "Add QR Code Image(s)" to load one or multiple parts at once
+   - Select multiple files: Hold `Ctrl` (Windows/Linux) or `Cmd` (macOS) while clicking
    - Or paste QR text directly in the text field
    - Status shows: "X QR codes loaded (last: Part Y/Z)"
 4. **Click "Decrypt and Save as"**
 5. **Select output file**
+
+**Tip:** You can select all QR code images at once by:
+- Using Ctrl+A in the file dialog
+- Or selecting the first file, then Shift+Click on the last file
 
 #### Option 3: Paste Multiple QR Texts
 
@@ -449,9 +454,6 @@ Contributions welcome! Please ensure:
 - Security considerations are documented
 
 ## FAQ
-
-**Q: Can I use this for sensitive data?**  
-A: Not recommended.
 
 **Q: What's the maximum file size?**  
 A: No hard limit. Files are automatically split into multiple QR codes. Practical limit depends on how many QR codes you want to manage.
