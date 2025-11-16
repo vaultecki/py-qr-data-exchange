@@ -217,7 +217,7 @@ class ReadWindow(Toplevel):
         multipart_frame = tkinter.LabelFrame(self, text="Multi-Part QR Codes", padx=5, pady=5)
         multipart_frame.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
 
-        tkinter.Button(multipart_frame, text="Add QR Code Image",
+        tkinter.Button(multipart_frame, text="Add QR Code Image(s)",
                        command=self.add_qr_image).pack(side=tkinter.LEFT, padx=5)
 
         self.multipart_label = tkinter.Label(multipart_frame, text="0 QR codes loaded")
@@ -236,13 +236,28 @@ class ReadWindow(Toplevel):
         self.grab_set()
 
     def add_qr_image(self):
-        """Adds a QR code image to the list."""
+        """Adds one or multiple QR code images to the list."""
         filetypes = [("Image files", "*.png *.jpg *.jpeg"), ("All files", "*.*")]
-        filepath = filedialog.askopenfilename(filetypes=filetypes)
+        filepaths = filedialog.askopenfilenames(filetypes=filetypes)
 
-        if filepath:
+        if not filepaths:
+            return
+
+        # Show progress for multiple files
+        total_files = len(filepaths)
+        if total_files > 1:
+            self.config(cursor="watch")
+            self.multipart_label.config(text=f"Loading {total_files} files...")
+            self.update()
+
+        loaded_count = 0
+        errors = []
+        last_info = ""
+
+        for idx, filepath in enumerate(filepaths, 1):
             try:
                 from app import service
+                logger.info(f"Reading QR code {idx}/{total_files}: {filepath}")
                 qr_text = service.read_qr_from_image(filepath)
                 self.qr_texts.append(qr_text)
 
@@ -250,17 +265,47 @@ class ReadWindow(Toplevel):
                 from app.controller import QrExchangeController
                 if QrExchangeController.is_multipart_qr(qr_text):
                     part_num, total = QrExchangeController.get_multipart_info(qr_text)
-                    info = f"Part {part_num}/{total}"
+                    last_info = f"Part {part_num}/{total}"
                 else:
-                    info = "Single-part"
+                    last_info = "Single-part"
 
-                self.multipart_label.config(
-                    text=f"{len(self.qr_texts)} QR codes loaded (last: {info})"
-                )
-                logger.info(f"QR code added: {info}")
+                loaded_count += 1
+                logger.info(f"QR code added: {last_info}")
+
+                # Update progress for multiple files
+                if total_files > 1:
+                    self.multipart_label.config(
+                        text=f"Loading {idx}/{total_files}... ({loaded_count} successful)"
+                    )
+                    self.update()
 
             except Exception as e:
-                messagebox.showerror("Error", f"Could not read QR code:\n{e}")
+                error_msg = f"{filepath}: {str(e)}"
+                errors.append(error_msg)
+                logger.error(f"Could not read QR code from {filepath}: {e}")
+
+        # Reset cursor
+        if total_files > 1:
+            self.config(cursor="")
+
+        # Update final status
+        if loaded_count > 0:
+            status_text = f"{len(self.qr_texts)} QR codes loaded"
+            if last_info:
+                status_text += f" (last: {last_info})"
+            self.multipart_label.config(text=status_text)
+
+        # Show errors if any
+        if errors:
+            error_summary = f"Successfully loaded {loaded_count}/{total_files} files.\n\nErrors:\n"
+            error_summary += "\n".join(errors[:5])  # Show max 5 errors
+            if len(errors) > 5:
+                error_summary += f"\n... and {len(errors) - 5} more errors"
+            messagebox.showwarning("Some files could not be read", error_summary)
+        elif loaded_count > 1:
+            messagebox.showinfo("Success", f"Successfully loaded {loaded_count} QR codes!")
+        elif loaded_count == 0:
+            messagebox.showerror("Error", "Could not read any QR codes from the selected files.")
 
     def clear_qr_list(self):
         """Clears the list of QR codes."""
@@ -352,3 +397,4 @@ class ReadWindow(Toplevel):
 
 if __name__ == "__main__":
     logger.info("main of extra_window.py")
+    
