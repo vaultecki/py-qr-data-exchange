@@ -1,5 +1,6 @@
 # Copyright [2025] [ecki]
 # SPDX-License-Identifier: Apache-2.0
+import base64
 
 import cv2
 import logging
@@ -55,7 +56,7 @@ def generate_qr_from_file(filepath: str, password: str, max_bytes: int) -> Union
 
     images = []
     for i, qr_string in enumerate(qr_strings, 1):
-        image = qrcode.make(qr_string, error_correction=1)
+        image = qrcode.make(base64.b64decode(qr_string), error_correction=1)
         images.append(image)
         logger.debug(f"Multi-part QR {i}/{len(qr_strings)} created")
 

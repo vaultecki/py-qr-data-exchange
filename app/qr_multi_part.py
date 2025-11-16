@@ -56,16 +56,19 @@ class MultiPartQrProcessor:
         """
         # Compress and encrypt the entire file once
         encrypted_string = qr_data_class.QrDataProcessor.serialize(raw_data, password)
-        encrypted_bytes = encrypted_string.encode('ascii')
+        encrypted_bytes = base64.b64decode(encrypted_string)
 
         file_hash = MultiPartQrProcessor.calculate_file_hash(raw_data)
 
+        data = msgpack.packb({'d': encrypted_bytes, 'h': file_hash})
+
         # Calculate maximum chunk size (minus overhead for metadata)
         # Since we use base64, we need to account for overhead
-        max_data_per_qr = max_qr_bytes - MultiPartQrProcessor.METADATA_OVERHEAD
+        test_overhead = msgpack.packb({'v': 2, 'p': 100, 't': 100, 'd': b' '})
+        max_data_per_qr = max_qr_bytes - len(test_overhead)
 
         # Split encrypted data into chunks
-        chunks = MultiPartQrProcessor.split_data(encrypted_bytes, max_data_per_qr)
+        chunks = MultiPartQrProcessor.split_data(data, max_data_per_qr)
         total_parts = len(chunks)
 
         logger.info(f"File will be split into {total_parts} QR codes")
@@ -74,10 +77,9 @@ class MultiPartQrProcessor:
         for i, chunk in enumerate(chunks, start=1):
             # Create metadata structure
             part_data = {
-                'v': 1,  # Version
+                'v': 2,  # Version
                 'p': i,  # part_number
                 't': total_parts,  # total_parts
-                'h': file_hash,  # hash
                 'd': chunk  # data chunk
             }
 
@@ -85,9 +87,9 @@ class MultiPartQrProcessor:
             packed = msgpack.packb(part_data)
             qr_string = base64.b64encode(packed).decode('ascii')
 
-            if len(qr_string) > max_qr_bytes:
+            if len(packed) > max_qr_bytes:
                 raise ValueError(
-                    f"Part {i} is too large at {len(qr_string)} bytes. "
+                    f"Part {i} is too large at {len(packed)} bytes. "
                     f"Maximum size: {max_qr_bytes} bytes"
                 )
 
@@ -122,7 +124,6 @@ class MultiPartQrProcessor:
                 parts.append({
                     'part_number': part_data[b'p'],
                     'total_parts': part_data[b't'],
-                    'hash': part_data[b'h'].decode('ascii') if isinstance(part_data[b'h'], bytes) else part_data[b'h'],
                     'data': part_data[b'd']
                 })
             except Exception as e:
@@ -133,14 +134,11 @@ class MultiPartQrProcessor:
             raise ValueError("No valid parts found")
 
         total_parts = parts[0]['total_parts']
-        file_hash = parts[0]['hash']
 
         # Check if all parts have same metadata
         for part in parts:
             if part['total_parts'] != total_parts:
                 raise ValueError("Inconsistent total_parts in parts")
-            if part['hash'] != file_hash:
-                raise ValueError("Inconsistent hashes - parts don't belong together")
 
         # Check if all parts are present
         part_numbers = {part['part_number'] for part in parts}
@@ -154,7 +152,10 @@ class MultiPartQrProcessor:
         parts.sort(key=lambda x: x['part_number'])
 
         # Reassemble data
-        encrypted_bytes = b''.join(part['data'] for part in parts)
+        data = b''.join(part['data'] for part in parts)
+        unpacked_data = msgpack.unpackb(data)
+        file_hash = unpacked_data[b'h']
+        encrypted_bytes = unpacked_data[b'd']
         encrypted_string = encrypted_bytes.decode('ascii')
 
         logger.info(f"Assembling {total_parts} parts")
