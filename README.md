@@ -14,8 +14,45 @@ Secure file transfer via QR codes with encryption, compression, and automatic mu
 
 ## Installation
 
-### Requirements
+### Standard Installation (Recommended)
 
+```bash
+# Clone or download the repository
+git clone <repository-url>
+cd py-qr-data-exchange
+
+# Install all dependencies
+pip install -r requirements.txt
+```
+
+### Minimal Installation
+
+For resource-constrained environments or minimal dependencies:
+
+```bash
+# Uses OpenCV instead of qreader (smaller footprint)
+pip install -r requirements-minimal.txt
+```
+
+### Development Installation
+
+For contributors and developers:
+
+```bash
+# Includes testing, linting, and documentation tools
+pip install -r requirements-dev.txt
+```
+
+### Manual Installation
+
+If you prefer to install packages individually:
+
+**Recommended (best QR code detection):**
+```bash
+pip install pillow qrcode qreader pynacl msgpack pyzstd
+```
+
+**Minimum (uses OpenCV fallback):**
 ```bash
 pip install pillow qrcode opencv-python pynacl msgpack pyzstd
 ```
@@ -23,6 +60,15 @@ pip install pillow qrcode opencv-python pynacl msgpack pyzstd
 ### Python Version
 
 - Python 3.7 or higher
+- Tested on Python 3.8, 3.9, 3.10, 3.11, 3.12
+
+### Why qreader?
+
+The application now uses `qreader` for improved QR code detection:
+- ✅ **Better detection**: More robust than OpenCV
+- ✅ **Handles difficult cases**: Rotated, blurry, or low-contrast QR codes
+- ✅ **Automatic fallback**: Falls back to OpenCV if qreader not available
+- ✅ **Optional**: Works with OpenCV alone, but qreader recommended
 
 ## Quick Start
 
@@ -259,10 +305,13 @@ msgpack({'d': raw_data, 'h': sha256_hash})
 
 - **pillow**: Image handling for QR codes
 - **qrcode**: QR code generation
-- **opencv-python**: QR code reading
+- **qreader** (recommended): Advanced QR code reading with better detection
+- **opencv-python** (fallback): Alternative QR code reading
 - **pynacl**: Encryption (NaCl/Argon2)
 - **msgpack**: Binary serialization
 - **pyzstd**: Zstandard compression
+
+**Note:** Either `qreader` or `opencv-python` is required for reading QR codes. `qreader` is recommended for better detection accuracy.
 
 ## Troubleshooting
 
@@ -273,6 +322,9 @@ msgpack({'d': raw_data, 'h': sha256_hash})
 - Image might be corrupted or low quality
 - Try rescanning or using a better quality image
 - Ensure the image actually contains a QR code
+- **Install qreader for better detection**: `pip install qreader`
+- Try adjusting image brightness/contrast
+- Ensure QR code is not rotated more than 45 degrees
 
 ### "Decryption failed. Wrong password or corrupted data"
 - Verify you're using the correct password
@@ -399,7 +451,7 @@ Contributions welcome! Please ensure:
 ## FAQ
 
 **Q: Can I use this for sensitive data?**  
-A: Yes, but follow best practices: use strong passwords, secure transmission channels for QR codes, and verify hash validation.
+A: Not recommended.
 
 **Q: What's the maximum file size?**  
 A: No hard limit. Files are automatically split into multiple QR codes. Practical limit depends on how many QR codes you want to manage.
@@ -421,3 +473,5 @@ A: Yes! Ensure sufficient DPI (300+ recommended) for reliable scanning.
 For issues, questions, or contributions, see the project repository.
 
 ---
+
+**Made with ❤️ for secure, portable data transfer**
