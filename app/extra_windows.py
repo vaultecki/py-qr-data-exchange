@@ -184,6 +184,12 @@ class QrWindow(Toplevel):
                 filename = f"qr_part_{i}_of_{len(self.qr_codes)}.png"
                 filepath = os.path.join(directory, filename)
                 qr_image.save(filepath)
+            for i, qr_string in enumerate(self.qr_texts, 1):
+                filename = f"qr_part_{i}_of_{len(self.qr_codes)}.txt"
+                filepath = os.path.join(directory, filename)
+                with open(filepath, "w") as text_file:
+                    text_file.write(qr_string)
+                    text_file.close()
 
             messagebox.showinfo("Success",
                                 f"{len(self.qr_codes)} QR codes saved to:\n{directory}")
