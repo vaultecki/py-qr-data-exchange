@@ -1,7 +1,6 @@
 # Copyright [2025] [ecki]
 # SPDX-License-Identifier: Apache-2.0
 
-import cv2
 import logging
 import qrcode
 from typing import List, Tuple, Union
@@ -64,18 +63,64 @@ def generate_qr_from_file(filepath: str, password: str, max_bytes: int) -> Union
 
 
 def read_qr_from_image(filepath: str) -> str:
-    """Reads a QR code image and returns the contained text."""
-    image = cv2.imread(filepath)
-    if image is None:
-        raise cv2.error("Image could not be read.")
+    """
+    Reads a QR code image and returns the contained text.
 
-    detector = cv2.QRCodeDetector()
-    decoded_text, _, _ = detector.detectAndDecode(image)
+    Uses qreader library for better detection and robustness.
+    Falls back to OpenCV if qreader is not available.
+    """
+    # Try qreader first (more robust)
+    try:
+        from qreader import QReader
 
-    if not decoded_text:
-        raise QRCodeNotFoundError("No QR code found in image.")
+        logger.debug(f"Reading QR code with qreader: {filepath}")
+        qreader_instance = QReader()
 
-    return decoded_text
+        # Read image with PIL
+        image = Image.open(filepath)
+
+        # Detect and decode QR code
+        decoded_text = qreader_instance.detect_and_decode(image=image)
+
+        # qreader returns a tuple with detected QR codes
+        if decoded_text and len(decoded_text) > 0:
+            # Take first QR code if multiple detected
+            result = decoded_text[0] if isinstance(decoded_text, tuple) else decoded_text
+
+            if result:
+                logger.info(f"QR code successfully read with qreader")
+                return result
+
+        logger.warning("qreader: No QR code detected, trying OpenCV fallback")
+
+    except ImportError:
+        logger.debug("qreader not available, using OpenCV")
+    except Exception as e:
+        logger.warning(f"qreader failed: {e}, trying OpenCV fallback")
+
+    # Fallback to OpenCV
+    try:
+        import cv2
+
+        logger.debug(f"Reading QR code with OpenCV: {filepath}")
+        image = cv2.imread(filepath)
+
+        if image is None:
+            raise QRCodeNotFoundError("Image could not be read.")
+
+        detector = cv2.QRCodeDetector()
+        decoded_text, _, _ = detector.detectAndDecode(image)
+
+        if not decoded_text:
+            raise QRCodeNotFoundError("No QR code found in image.")
+
+        logger.info("QR code successfully read with OpenCV")
+        return decoded_text
+
+    except ImportError:
+        raise QRCodeNotFoundError(
+            "No QR code reader available. Install either 'qreader' or 'opencv-python'."
+        )
 
 
 def read_multiple_qr_from_images(filepaths: List[str]) -> List[str]:
@@ -167,6 +212,22 @@ if __name__ == "__main__":
         if isinstance(result[0], list):
             images, texts = result
             logger.info(f"Multi-part: {len(images)} QR codes created")
+
+            # Save first QR code for testing
+            test_qr_path = tempfile.mktemp(suffix='.png')
+            images[0].save(test_qr_path)
+            logger.info(f"Test QR saved to: {test_qr_path}")
+
+            # Test reading
+            try:
+                read_text = read_qr_from_image(test_qr_path)
+                logger.info(f"QR read test: {'✓ SUCCESS' if read_text == texts[0] else '✗ FAILED'}")
+            except Exception as e:
+                logger.error(f"QR read test failed: {e}")
+            finally:
+                import os
+
+                os.unlink(test_qr_path)
 
             # Decrypt
             restored = decrypt_qr_data(texts, test_password)
