@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import math
+import pprint
+
 import msgpack
 import base64
 from typing import List, Tuple
@@ -54,21 +57,20 @@ class MultiPartQrProcessor:
         Returns:
             List of QR code strings
         """
-        # Compress and encrypt the entire file once
-        encrypted_string = qr_data_class.QrDataProcessor.serialize(raw_data, password)
-        encrypted_bytes = base64.b64decode(encrypted_string)
-
         file_hash = MultiPartQrProcessor.calculate_file_hash(raw_data)
+        data = msgpack.packb({'d': raw_data, 'h': file_hash})
 
-        data = msgpack.packb({'d': encrypted_bytes, 'h': file_hash})
+        # Compress and encrypt the entire file once
+        encrypted_string = qr_data_class.QrDataProcessor.serialize(data, password)
+        encrypted_bytes = base64.b64decode(encrypted_string)
 
         # Calculate maximum chunk size (minus overhead for metadata)
         # Since we use base64, we need to account for overhead
         test_overhead = msgpack.packb({'v': 2, 'p': 100, 't': 100, 'd': b' '})
-        max_data_per_qr = max_qr_bytes - len(test_overhead)
+        max_data_per_qr = math.floor((max_qr_bytes - len(test_overhead)) * 0.70)
 
         # Split encrypted data into chunks
-        chunks = MultiPartQrProcessor.split_data(data, max_data_per_qr)
+        chunks = MultiPartQrProcessor.split_data(encrypted_bytes, max_data_per_qr)
         total_parts = len(chunks)
 
         logger.info(f"File will be split into {total_parts} QR codes")
@@ -87,9 +89,9 @@ class MultiPartQrProcessor:
             packed = msgpack.packb(part_data)
             qr_string = base64.b64encode(packed).decode('ascii')
 
-            if len(packed) > max_qr_bytes:
+            if len(qr_string) > max_qr_bytes:
                 raise ValueError(
-                    f"Part {i} is too large at {len(packed)} bytes. "
+                    f"Part {i} is too large at {len(qr_string)} bytes. "
                     f"Maximum size: {max_qr_bytes} bytes"
                 )
 
@@ -122,9 +124,9 @@ class MultiPartQrProcessor:
                 part_data = msgpack.unpackb(packed)
 
                 parts.append({
-                    'part_number': part_data[b'p'],
-                    'total_parts': part_data[b't'],
-                    'data': part_data[b'd']
+                    'part_number': part_data['p'],
+                    'total_parts': part_data['t'],
+                    'data': part_data['d']
                 })
             except Exception as e:
                 raise ValueError(f"Error parsing QR code part: {e}")
@@ -152,16 +154,17 @@ class MultiPartQrProcessor:
         parts.sort(key=lambda x: x['part_number'])
 
         # Reassemble data
-        data = b''.join(part['data'] for part in parts)
-        unpacked_data = msgpack.unpackb(data)
-        file_hash = unpacked_data[b'h']
-        encrypted_bytes = unpacked_data[b'd']
-        encrypted_string = encrypted_bytes.decode('ascii')
+        encrypted_bytes = b''.join(part['data'] for part in parts)
+        encrypted_string = base64.b64encode(encrypted_bytes).decode("ascii")
 
         logger.info(f"Assembling {total_parts} parts")
 
         # Decrypt and decompress
-        raw_data = qr_data_class.QrDataProcessor.deserialize(encrypted_string, password)
+        data = qr_data_class.QrDataProcessor.deserialize(encrypted_string, password)
+
+        unpacked_data = msgpack.unpackb(data)
+        file_hash = unpacked_data['h']
+        raw_data = unpacked_data['d']
 
         # Validate hash
         reconstructed_hash = MultiPartQrProcessor.calculate_file_hash(raw_data)
@@ -178,8 +181,8 @@ class MultiPartQrProcessor:
         try:
             packed = base64.b64decode(qr_string)
             part_data = msgpack.unpackb(packed)
-            # Multi-part QRs have keys 'v', 'p', 't', 'h', 'd'
-            return b'v' in part_data and b'p' in part_data and b't' in part_data
+            # Multi-part QRs have keys 'v', 'p', 't', 'd'
+            return 'v' in part_data and 'p' in part_data and 't' in part_data
         except Exception:
             return False
 
@@ -194,7 +197,7 @@ class MultiPartQrProcessor:
         try:
             packed = base64.b64decode(qr_string)
             part_data = msgpack.unpackb(packed)
-            return part_data[b'p'], part_data[b't']
+            return part_data['p'], part_data['t']
         except Exception as e:
             raise ValueError(f"Not a valid multi-part QR: {e}")
 

@@ -3,6 +3,7 @@
 
 import logging
 import math
+import pprint
 import queue
 import threading
 import tkinter
@@ -278,6 +279,20 @@ class ReadWindow(Toplevel):
                 self.config(cursor="")
                 return
             input_data = input_str
+
+            if len(input_str) > 2953 and "==" in input_str:
+                logger.debug("probably multipart string")
+                input_array = input_str.lstrip().rstrip().split("==")
+                self.qr_texts = []
+                for part in input_array:
+                    part = part.lstrip().rstrip() + "=="
+                    self.qr_texts.append(part)
+                    from app.controller import QrExchangeController
+                    if QrExchangeController.is_multipart_qr(part):
+                        part_num, total = QrExchangeController.get_multipart_info(part)
+                        info = f"Part {part_num}/{total}"
+                        logger.debug(info)
+                input_data = self.qr_texts
 
         threading.Thread(
             target=self.on_click_decrypt_thread_worker,
