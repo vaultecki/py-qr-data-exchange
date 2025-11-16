@@ -64,11 +64,11 @@ class GuiClass:
         )
         self.button_read.grid(row=4, column=0)
 
-        self.button_read = tkinter.Button(
+        self.button_read_string = tkinter.Button(
             self.root, text="Read String",
             command=self.click_button_read_string
         )
-        self.button_read.grid(row=4, column=1)
+        self.button_read_string.grid(row=4, column=1)
 
     @staticmethod
     def entry_password_validate(password):
@@ -100,12 +100,31 @@ class GuiClass:
         )
 
     def _on_generate_success(self, qr_image, qr_text):
-        self._enable_ui()
-        extra_windows.QrWindow(self.root, qr_image, qr_text)
+        """Called from worker thread - schedule UI update in main thread"""
+        logger.info(f"Generate success callback. Type: {type(qr_image)}, Is list: {isinstance(qr_image, list)}")
+
+        def show_window():
+            try:
+                self._enable_ui()
+                logger.info("Creating QrWindow from main thread")
+                extra_windows.QrWindow(self.root, qr_image, qr_text)
+            except Exception as e:
+                logger.error(f"Error creating QrWindow: {e}")
+                logger.exception("Full traceback:")
+                messagebox.showerror("Error", f"Could not display QR window: {e}")
+
+        # Schedule window creation in main thread
+        self.root.after(0, show_window)
 
     def _on_generate_error(self, error: Exception):
-        self._enable_ui()
-        messagebox.showerror("Error", str(error))
+        """Called from worker thread - schedule UI update in main thread"""
+        logger.error(f"Generate error callback: {error}")
+
+        def show_error():
+            self._enable_ui()
+            messagebox.showerror("Error", str(error))
+
+        self.root.after(0, show_error)
 
     def click_button_filemanager(self):
         filetypes = [("all files", "*.*"), ("PNG files", "*.png")]
@@ -123,8 +142,8 @@ class GuiClass:
 
         self.controller.read_qr_from_image_async(
             filepath,
-            on_success=lambda text: extra_windows.ReadWindow(self.root, password, text),
-            on_error=lambda err: messagebox.showerror("Error", str(err))
+            on_success=lambda text: self.root.after(0, lambda: extra_windows.ReadWindow(self.root, password, text)),
+            on_error=lambda err: self.root.after(0, lambda: messagebox.showerror("Error", str(err)))
         )
 
     def click_button_read_string(self):

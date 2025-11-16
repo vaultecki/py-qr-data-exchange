@@ -1,7 +1,6 @@
 # Copyright [2025] [ecki]
 # SPDX-License-Identifier: Apache-2.0
 
-# controller.py
 import threading
 import logging
 from typing import Callable, Union, List
@@ -40,8 +39,10 @@ class QrExchangeController:
                     filepath, password, self.max_qr_bytes
                 )
                 qr_image, qr_text = result
+                logger.info(f"QR generation complete. Is list: {isinstance(qr_image, list)}")
                 on_success(qr_image, qr_text)
             except Exception as e:
+                logger.error(f"QR generation error: {e}")
                 on_error(e)
 
         threading.Thread(target=worker, daemon=True).start()

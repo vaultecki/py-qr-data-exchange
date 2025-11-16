@@ -24,16 +24,19 @@ class QrWindow(Toplevel):
 
         # Check if multi-part
         self.is_multipart = isinstance(qr_code_generated, list)
+        logger.info(f"QrWindow initialized. Is multipart: {self.is_multipart}, Type: {type(qr_code_generated)}")
 
         if self.is_multipart:
             self.title(f"Generated QR Codes ({len(qr_code_generated)} parts)")
             self.qr_codes = qr_code_generated
             self.qr_texts = qr_code_text
+            logger.info(f"Setting up multipart UI with {len(qr_code_generated)} parts")
             self._setup_multipart_ui()
         else:
             self.title("Generated QR Code")
             self.qr_codes = [qr_code_generated]
             self.qr_texts = [qr_code_text]
+            logger.info("Setting up single-part UI")
             self._setup_single_ui()
 
         self.transient(master)
