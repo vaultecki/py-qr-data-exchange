@@ -4,12 +4,11 @@ Secure file transfer via QR codes with encryption, compression, and automatic mu
 
 ## Features
 
-- 🔒 **Strong Encryption**: NaCl/Argon2i for password-based encryption
+- 🔒 **Encryption**: NaCl/Argon2i for password-based encryption
 - 🗜️ **Compression**: Zstandard compression reduces file size
 - 📱 **QR Code Generation**: Convert files to QR codes for easy transfer
 - 🔄 **Multi-Part Support**: Large files automatically split into multiple QR codes
 - 🖥️ **GUI & CLI**: User-friendly graphical interface and powerful command-line tools
-- ✅ **Hash Validation**: SHA256 ensures data integrity
 - 🔀 **Flexible Reading**: Multi-part QR codes can be read in any order
 
 ## Installation
@@ -473,7 +472,3 @@ A: Yes! Ensure sufficient DPI (300+ recommended) for reliable scanning.
 ## Support
 
 For issues, questions, or contributions, see the project repository.
-
----
-
-**Made with ❤️ for secure, portable data transfer**
