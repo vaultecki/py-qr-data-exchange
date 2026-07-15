@@ -4,7 +4,7 @@ Secure file transfer via QR codes with encryption, compression, and automatic mu
 
 ## Features
 
-- 🔒 **Strong Encryption**: NaCl SecretBox with Argon2i password-based key derivation — every single QR code has its own random salt and its own independently derived key
+- 🔒 **Encryption**: NaCl SecretBox with Argon2i password-based key derivation
 - 🗜️ **Compression**: LZMA compresses the bundled content before encryption
 - 📱 **QR Code Generation**: Convert files/folders to QR codes for easy, offline transfer
 - 📦 **Multiple Files & Folders**: Bundle any number of files and/or entire directories (with subfolders) into a single encrypted transfer
@@ -499,6 +499,3 @@ A: Yes! Ensure sufficient DPI (300+ recommended) for reliable scanning.
 
 For issues, questions, or contributions, see the project repository.
 
----
-
-**Made with ❤️ for secure, portable data transfer**
