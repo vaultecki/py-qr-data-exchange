@@ -123,41 +123,20 @@ python -m app.cli read -i qrcode.png -o restored/
    - A navigation window opens (used for one part just as much as for many):
      - Browse through parts with "◄ Previous" / "Next ►"
      - "Save Current": Save the currently displayed QR code image
-     - "Save All": Save all QR codes to a folder (includes `.txt` files with the QR text)
+     - "Save All": Save all QR codes to a folder (includes `.txt` files with the QR text — these can be re-imported directly when decrypting, see below)
 
 ### Decrypting QR Codes
 
-#### Option 1: From QR Code Image
-
 1. **Enter password** (same as used for encryption)
-2. **Select the QR code image** via "Browse Files" (exactly one image)
-3. **Click "Read QR"**
-4. **Decrypt window opens**
-   - Click "Decrypt and Extract to Folder"
-   - Choose an output folder — all recovered files (and folder structure) are extracted there
+2. **Click "Read QR Code(s)"**
+3. **Add parts**, in any order, mixing both ways as needed:
+   - **"Add QR Code File(s)"**: pick one or more QR code images (`.png`/`.jpg`) and/or the `.txt` files saved by "Save All" — each file is one part. Select multiple at once: hold `Ctrl` (Windows/Linux) or `Cmd` (macOS), or use Ctrl+A / Shift+Click in the file dialog.
+   - **Type or paste** a QR code's text into the text field and click **"Add"**. Pasting several concatenated texts (base64 blobs ending in `==`) is auto-detected and split into individual parts.
+   - The status label shows **"X/Y parts loaded"** once at least one part has decrypted successfully (Y only becomes known at that point — it's encrypted, not visible beforehand).
+4. **"Decrypt and Extract to Folder"** stays disabled until every part (1..Y) is loaded, then becomes clickable.
+5. Click it and **choose an output folder** — all recovered files (and folder structure) are extracted there.
 
-#### Option 2: From Text String
-
-1. **Enter password**
-2. **Click "Read String"**
-3. **Add QR codes**:
-   - Click "Add QR Code Image(s)" to load one or multiple parts at once
-   - Select multiple files: Hold `Ctrl` (Windows/Linux) or `Cmd` (macOS) while clicking
-   - Or paste QR text directly in the text field
-   - Status shows: "X QR codes loaded"
-4. **Click "Decrypt and Extract to Folder"**
-5. **Select an output folder**
-
-**Tip:** You can select all QR code images at once by:
-- Using Ctrl+A in the file dialog
-- Or selecting the first file, then Shift+Click on the last file
-
-#### Option 3: Paste Multiple QR Texts
-
-If you have multiple QR texts concatenated (ending with `==`):
-- Paste them into the text field
-- The application auto-detects the multi-part format
-- Automatically splits at `==` boundaries
+A part that fails to decrypt (wrong password, corrupted, or belonging to a different transfer) is rejected immediately with an explanation when you try to add it, rather than only surfacing as a failure at the final decrypt step.
 
 ## CLI Usage
 
@@ -423,10 +402,10 @@ python -m app.cli read -i archive_part*.png -o restored/
 To decrypt:
 1. Start GUI: `python run_app.py`
 2. Password: `test123`
-3. Click "Read String"
-4. "Add QR Code Image" for each part
-5. Status: "4 QR codes loaded"
-6. "Decrypt and Extract to Folder" → choose output folder
+3. Click "Read QR Code(s)"
+4. "Add QR Code File(s)" for each part (images or `.txt` files)
+5. Status: "4/4 parts loaded" → "Decrypt and Extract to Folder" becomes clickable
+6. Click it → choose output folder
 7. Files restored!
 
 ## Development
