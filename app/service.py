@@ -67,7 +67,7 @@ def read_qr_from_image(filepath: str) -> str:
             result = decoded_text[0] if isinstance(decoded_text, tuple) else decoded_text
 
             if result:
-                logger.info(f"QR code successfully read with qreader")
+                logger.info("QR code successfully read with qreader")
                 return result
 
         logger.warning("qreader: No QR code detected, trying OpenCV fallback")
