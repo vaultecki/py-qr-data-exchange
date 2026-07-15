@@ -185,7 +185,7 @@ class ReadWindow(Toplevel):
         multipart_frame = tkinter.LabelFrame(self, text="Loaded Parts", padx=5, pady=5)
         multipart_frame.grid(row=1, column=0, columnspan=3, padx=5, pady=5, sticky="ew")
 
-        tkinter.Button(multipart_frame, text="Add QR Code Image(s)",
+        tkinter.Button(multipart_frame, text="Add QR Code File(s)",
                        command=self.add_qr_image).pack(side=tkinter.LEFT, padx=5)
 
         self.status_label = tkinter.Label(multipart_frame, text="0 parts loaded")
@@ -270,9 +270,25 @@ class ReadWindow(Toplevel):
         if errors:
             messagebox.showerror("Error", "\n".join(errors))
 
+    @staticmethod
+    def _read_qr_text_from_file(filepath: str) -> str:
+        """
+        Reads a QR code's text either from a QR text file (as saved by "Save All",
+        one raw base64 string per file) or by decoding an image.
+        """
+        if filepath.lower().endswith(".txt"):
+            with open(filepath, "r") as f:
+                return f.read().strip()
+        return service.read_qr_from_image(filepath)
+
     def add_qr_image(self):
-        """Adds one or multiple QR code images to the list."""
-        filetypes = [("Image files", "*.png *.jpg *.jpeg"), ("All files", "*.*")]
+        """Adds one or multiple QR code images or QR text files to the list."""
+        filetypes = [
+            ("QR code files", "*.png *.jpg *.jpeg *.txt"),
+            ("Image files", "*.png *.jpg *.jpeg"),
+            ("Text files", "*.txt"),
+            ("All files", "*.*"),
+        ]
         filepaths = filedialog.askopenfilenames(filetypes=filetypes)
 
         if not filepaths:
@@ -291,7 +307,7 @@ class ReadWindow(Toplevel):
         for idx, filepath in enumerate(filepaths, 1):
             try:
                 logger.info(f"Reading QR code {idx}/{total_files}: {filepath}")
-                qr_text = service.read_qr_from_image(filepath)
+                qr_text = self._read_qr_text_from_file(filepath)
 
                 error = self._try_add_part(qr_text)
                 if error:
