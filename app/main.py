@@ -26,14 +26,12 @@ class GuiClass:
         label = tkinter.Label(self.root, text=" ")
         label.grid(row=0, column=0, columnspan=4)
 
-        self.label_password = tkinter.Label(self.root, text="Password [1-20]:")
+        self.label_password = tkinter.Label(self.root, text="Password:")
         self.label_password.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.E)
 
         self.password_var = tkinter.StringVar(self.root, "")
-        reg = self.root.register(self.entry_password_validate)
         self.entry_password = tkinter.Entry(
-            self.root, width=21, validate="key",
-            validatecommand=(reg, '%P'),
+            self.root, width=21,
             show='*',
             textvariable=self.password_var
         )
@@ -77,10 +75,6 @@ class GuiClass:
             command=self.click_button_read_string
         )
         self.button_read_string.grid(row=4, column=1)
-
-    @staticmethod
-    def entry_password_validate(password):
-        return len(password) <= 20
 
     def _validate_inputs(self, check_filename=True):
         if not self.password_var.get():

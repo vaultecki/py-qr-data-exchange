@@ -106,9 +106,9 @@ python -m app.cli read -i qrcode.png -o restored/
    python run_app.py
    ```
 
-2. **Enter a password** (1-20 characters)
+2. **Enter a password**
    - Password is required for encryption/decryption
-   - Use a strong, memorable password
+   - Use a strong, memorable password — there's no length limit, so a long passphrase is a good choice
 
 3. **Select input**
    - **"Browse Files"**: pick one or more files (hold `Ctrl`/`Cmd` to multi-select)
@@ -235,8 +235,8 @@ python -m app.cli -v generate -i file.txt
 
 ## Password Guidelines
 
-- **Length**: 1-20 characters
-- **Strength**: Use a mix of letters, numbers, and symbols
+- **Length**: No limit — a longer passphrase is stronger and Argon2i's cost doesn't depend on password length
+- **Strength**: Use a mix of letters, numbers, and symbols, or a long passphrase
 - **Storage**: Keep passwords secure and separate from QR codes
 - **Recovery**: Lost passwords = lost data (by design for security)
 

@@ -14,6 +14,27 @@ def run_cli(monkeypatch, args):
     return cli.main()
 
 
+def test_generate_accepts_long_password(tmp_path, monkeypatch):
+    # No length cap: a long passphrase must work end-to-end, not just a short password.
+    long_password = "correct horse battery staple " * 5
+    f = tmp_path / "input.txt"
+    f.write_text("long password roundtrip")
+    out = tmp_path / "out.png"
+
+    rc = run_cli(monkeypatch, [
+        "generate", "-i", str(f), "-o", str(out), "-p", long_password, "--save-texts",
+    ])
+    assert rc == 0
+    text_file = tmp_path / "out_qr_texts.txt"
+
+    restored = tmp_path / "restored"
+    rc = run_cli(monkeypatch, [
+        "decrypt", "--text-file", str(text_file), "-o", str(restored), "-p", long_password,
+    ])
+    assert rc == 0
+    assert (restored / "input.txt").read_text() == "long password roundtrip"
+
+
 def test_generate_creates_single_qr_file(tmp_path, monkeypatch, password):
     f = tmp_path / "input.txt"
     f.write_text("cli test data")

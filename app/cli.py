@@ -38,10 +38,6 @@ def generate_qr(args):
         logger.error("Password cannot be empty.")
         return 1
 
-    if len(password) > 20:
-        logger.error("Password must be at most 20 characters.")
-        return 1
-
     try:
         max_bytes = args.max_size or 2953
         images, texts = service.generate_qr_from_paths(
