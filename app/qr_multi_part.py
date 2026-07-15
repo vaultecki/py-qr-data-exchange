@@ -138,8 +138,12 @@ class MultiPartQrProcessor:
             return False
 
     @staticmethod
-    def _decrypt_part(qr_string: str, password: str) -> dict:
-        """Decrypts a single QR code string, returning its inner {'v', 'p', 't', 'd'} dict."""
+    def decrypt_part(qr_string: str, password: str) -> dict:
+        """
+        Decrypts a single QR code string on its own, returning its inner
+        {'v', 'p', 't', 'd'} dict. Useful to learn a part's number/total-part
+        count (or just to validate a password) without needing every part.
+        """
         try:
             outer = msgpack.unpackb(base64.b64decode(qr_string))
             salt = outer["s"]
@@ -167,7 +171,7 @@ class MultiPartQrProcessor:
 
         parts = []
         for qr_text in qr_texts:
-            inner = cls._decrypt_part(qr_text, password)
+            inner = cls.decrypt_part(qr_text, password)
             try:
                 parts.append({
                     "part_number": inner["p"],

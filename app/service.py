@@ -129,6 +129,17 @@ def is_valid_qr_part(qr_text: str) -> bool:
     return qr_multi_part.MultiPartQrProcessor.is_valid_qr_part(qr_text)
 
 
+def get_part_info(qr_text: str, password: str) -> Tuple[int, int]:
+    """
+    Decrypts a single QR part and returns (part_number, total_parts).
+
+    Requires the correct password, since this info lives inside the ciphertext.
+    Raises qr_multi_part.DecryptionError on a wrong password or corrupted part.
+    """
+    inner = qr_multi_part.MultiPartQrProcessor.decrypt_part(qr_text, password)
+    return inner["p"], inner["t"]
+
+
 def decrypt_qr_data(qr_texts: Sequence[str], password: str, output_dir: str) -> List[Path]:
     """
     Decrypts QR data and extracts the resulting archive into output_dir.

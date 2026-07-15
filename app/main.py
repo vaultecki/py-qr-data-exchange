@@ -64,17 +64,11 @@ class GuiClass:
         )
         self.button_generate.grid(row=4, column=2)
 
-        self.button_read = tkinter.Button(
-            self.root, text="Read QR",
-            command=self.click_button_read_qr
-        )
-        self.button_read.grid(row=4, column=0)
-
         self.button_read_string = tkinter.Button(
-            self.root, text="Read String",
+            self.root, text="Read QR Code(s)",
             command=self.click_button_read_string
         )
-        self.button_read_string.grid(row=4, column=1)
+        self.button_read_string.grid(row=4, column=0)
 
     def _validate_inputs(self, check_filename=True):
         if not self.password_var.get():
@@ -145,23 +139,6 @@ class GuiClass:
         self.entry_filename.delete(0, tkinter.END)
         self.entry_filename.insert(0, text)
         self.entry_filename.config(state="readonly")
-
-    def click_button_read_qr(self):
-        if not self._validate_inputs(check_filename=True):
-            return
-
-        if len(self.selected_paths) != 1:
-            messagebox.showerror("Error", "Please select exactly one QR code image (use 'Browse Files').")
-            return
-
-        filepath = self.selected_paths[0]
-        password = self.password_var.get()
-
-        self.controller.read_qr_from_image_async(
-            filepath,
-            on_success=lambda text: self.root.after(0, lambda: extra_windows.ReadWindow(self.root, password, text)),
-            on_error=lambda err: self.root.after(0, lambda: messagebox.showerror("Error", str(err)))
-        )
 
     def click_button_read_string(self):
         if not self._validate_inputs(check_filename=False):

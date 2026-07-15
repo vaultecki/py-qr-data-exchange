@@ -4,7 +4,7 @@
 import threading
 import logging
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Tuple
 from PIL import Image
 
 from app import service
@@ -40,23 +40,6 @@ class QrExchangeController:
                 on_success(images, texts)
             except Exception as e:
                 logger.error(f"QR generation error: {e}")
-                on_error(e)
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    @staticmethod
-    def read_qr_from_image_async(filepath: str,
-                                 on_success: Callable[[str], None],
-                                 on_error: Callable[[Exception], None]):
-        """
-        Asynchronously reads a QR code from an image.
-        """
-
-        def worker():
-            try:
-                text = service.read_qr_from_image(filepath)
-                on_success(text)
-            except Exception as e:
                 on_error(e)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -99,3 +82,16 @@ class QrExchangeController:
     def is_valid_qr_part(qr_text: str) -> bool:
         """Structural check only: does this look like one of our QR codes?"""
         return service.is_valid_qr_part(qr_text)
+
+    @staticmethod
+    def get_part_info(qr_text: str, password: str) -> Tuple[int, int]:
+        """
+        Decrypts a single QR part just enough to learn its part number and
+        total-part count. Requires the correct password (this info is encrypted).
+        """
+        try:
+            return service.get_part_info(qr_text, password)
+        except DecryptionError as e:
+            raise e
+        except Exception as e:
+            raise Exception(f"Unexpected error while reading part info: {e}")
