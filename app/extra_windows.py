@@ -205,9 +205,17 @@ class ReadWindow(Toplevel):
         self.decrypt_result_queue = queue.Queue()
         self.text_add_queue = queue.Queue()
         self.file_add_queue = queue.Queue()
+        self._destroyed = False
 
         self.transient(master)
         self.grab_set()
+
+    def destroy(self):
+        # Background add/decrypt workers keep running after the window closes and
+        # schedule self.after(...) poll callbacks; this flag lets those callbacks
+        # bail out instead of touching widgets that no longer exist.
+        self._destroyed = True
+        super().destroy()
 
     def _try_add_part(self, qr_text: str) -> str:
         """
@@ -298,6 +306,8 @@ class ReadWindow(Toplevel):
         q.put(errors)
 
     def _poll_text_add_result(self):
+        if self._destroyed:
+            return
         try:
             errors = self.text_add_queue.get_nowait()
         except queue.Empty:
@@ -366,6 +376,8 @@ class ReadWindow(Toplevel):
         q.put((loaded_count, len(filepaths), errors))
 
     def _poll_file_add_result(self):
+        if self._destroyed:
+            return
         try:
             loaded_count, total_files, errors = self.file_add_queue.get_nowait()
         except queue.Empty:
@@ -430,6 +442,8 @@ class ReadWindow(Toplevel):
 
     def process_queue(self):
         """This function runs safely in the main thread."""
+        if self._destroyed:
+            return
         try:
             logger.debug("Checking if something is in the queue (non-blocking)")
             message_type, data = self.decrypt_result_queue.get_nowait()

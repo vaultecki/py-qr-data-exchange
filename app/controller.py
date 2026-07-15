@@ -45,23 +45,6 @@ class QrExchangeController:
         threading.Thread(target=worker, daemon=True).start()
 
     @staticmethod
-    def read_multiple_qr_from_images_async(filepaths: List[str],
-                                           on_success: Callable[[List[str]], None],
-                                           on_error: Callable[[Exception], None]):
-        """
-        Asynchronously reads multiple QR codes from images.
-        """
-
-        def worker():
-            try:
-                texts = service.read_multiple_qr_from_images(filepaths)
-                on_success(texts)
-            except Exception as e:
-                on_error(e)
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    @staticmethod
     def decrypt_qr_data(qr_texts: List[str], password: str, output_dir: str) -> List[Path]:
         """
         Pure business logic: no thread needed, called from UI thread.

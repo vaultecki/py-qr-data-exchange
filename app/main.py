@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import queue
 import tkinter
 from tkinter import filedialog, messagebox
 from typing import List
@@ -87,39 +88,41 @@ class GuiClass:
 
         self._disable_ui()
 
+        # generate_qr_async's on_success/on_error run on its background worker
+        # thread -- Tk/Tcl calls (including .after()) are not safe from there,
+        # so only a thread-safe queue.Queue.put() happens in the callbacks, and
+        # the actual UI update happens via polling from the main thread below.
+        result_queue = queue.Queue()
         self.controller.generate_qr_async(
             self.selected_paths,
             password,
-            on_success=self._on_generate_success,
-            on_error=self._on_generate_error,
+            on_success=lambda images, texts: result_queue.put(("success", (images, texts))),
+            on_error=lambda error: result_queue.put(("error", error)),
         )
+        self.root.after(100, self._poll_generate_result, result_queue)
 
-    def _on_generate_success(self, qr_images, qr_texts):
-        """Called from worker thread - schedule UI update in main thread"""
-        logger.info(f"Generate success callback. {len(qr_images)} QR code(s)")
+    def _poll_generate_result(self, result_queue):
+        """Runs safely on the main thread."""
+        try:
+            message_type, data = result_queue.get_nowait()
+        except queue.Empty:
+            self.root.after(100, self._poll_generate_result, result_queue)
+            return
 
-        def show_window():
+        self._enable_ui()
+
+        if message_type == "success":
+            qr_images, qr_texts = data
+            logger.info(f"Generate success. {len(qr_images)} QR code(s)")
             try:
-                self._enable_ui()
-                logger.info("Creating QrWindow from main thread")
                 extra_windows.QrWindow(self.root, qr_images, qr_texts)
             except Exception as e:
                 logger.error(f"Error creating QrWindow: {e}")
                 logger.exception("Full traceback:")
                 messagebox.showerror("Error", f"Could not display QR window: {e}")
-
-        # Schedule window creation in main thread
-        self.root.after(0, show_window)
-
-    def _on_generate_error(self, error: Exception):
-        """Called from worker thread - schedule UI update in main thread"""
-        logger.error(f"Generate error callback: {error}")
-
-        def show_error():
-            self._enable_ui()
-            messagebox.showerror("Error", str(error))
-
-        self.root.after(0, show_error)
+        else:
+            logger.error(f"Generate error: {data}")
+            messagebox.showerror("Error", str(data))
 
     def click_button_browse_files(self):
         filepaths = filedialog.askopenfilenames(filetypes=[("all files", "*.*")])
