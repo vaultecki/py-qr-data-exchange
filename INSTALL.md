@@ -291,7 +291,8 @@ python run_app.py
 | opencv-python | ≥4.8.0 | QR reading (fallback) | ~100 MB |
 | PyNaCl | ≥1.5.0 | Encryption | ~5 MB |
 | msgpack | ≥1.0.0 | Serialization | ~1 MB |
-| pyzstd | ≥0.15.0 | Compression | ~2 MB |
+
+Compression (`lzma`) and archiving (`tarfile`) are part of the Python standard library — no separate package, no extra size.
 
 ### Why These Versions?
 
@@ -301,7 +302,6 @@ python run_app.py
 - **opencv-python 4.8+**: Stable API, good performance
 - **PyNaCl 1.5+**: Security updates
 - **msgpack 1.0+**: Performance improvements
-- **pyzstd 0.15+**: Better compression ratios
 
 ## Upgrading
 
@@ -339,7 +339,7 @@ rmdir /s venv  # Windows
 ### Uninstall Packages
 
 ```bash
-pip uninstall -y pillow qrcode qreader opencv-python pynacl msgpack pyzstd
+pip uninstall -y pillow qrcode qreader opencv-python pynacl msgpack
 ```
 
 ## Troubleshooting Common Issues
@@ -459,9 +459,9 @@ pip install -r requirements-locked.txt
 
 If you encounter issues:
 
-1. **Check logs**: Run with `-v` flag for verbose output
+1. **Check logs**: Run with the global `-v` flag (must come before the subcommand) for verbose output
    ```bash
-   python -m app.cli generate -i file.txt -v
+   python -m app.cli -v generate -i file.txt
    ```
 
 2. **Verify Python version**: 
@@ -483,7 +483,8 @@ If you encounter issues:
 
 5. **Create minimal test case**:
    ```bash
-   python -m app.qr_data_class  # Test encryption
+   python -m app.crypt_utils     # Test encryption utilities
+   python -m app.qr_multi_part   # Test packaging/encryption/reassembly
    python -m app.service         # Test QR generation
    ```
 
