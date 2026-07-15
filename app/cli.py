@@ -8,6 +8,7 @@ import getpass
 from pathlib import Path
 
 from app import service
+from app import qr_multi_part
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +23,13 @@ def setup_logging(verbose: bool):
 
 
 def generate_qr(args):
-    """Generates QR code(s) from a file."""
-    input_file = Path(args.input)
+    """Generates QR code(s) from one or more files/directories."""
+    input_paths = [Path(p) for p in args.input]
 
-    if not input_file.exists():
-        logger.error(f"Input file not found: {input_file}")
-        return 1
+    for input_path in input_paths:
+        if not input_path.exists():
+            logger.error(f"Input path not found: {input_path}")
+            return 1
 
     # Request password
     password = args.password or getpass.getpass("Enter password: ")
@@ -42,60 +44,49 @@ def generate_qr(args):
 
     try:
         max_bytes = args.max_size or 2953
-        result = service.generate_qr_from_file(
-            str(input_file),
+        images, texts = service.generate_qr_from_paths(
+            [str(p) for p in input_paths],
             password,
             max_bytes
         )
 
-        qr_images, qr_texts = result
-
-        # Check if single-part or multi-part
-        if isinstance(qr_images, list):
-            # Multi-part
-            logger.info(f"File was split into {len(qr_images)} QR codes")
-
-            if args.output:
-                output_base = Path(args.output)
-                output_dir = output_base.parent
-                output_name = output_base.stem
-                output_ext = output_base.suffix or '.png'
-            else:
-                output_dir = input_file.parent
-                output_name = input_file.stem
-                output_ext = '.png'
-
-            saved_files = []
-            for i, qr_image in enumerate(qr_images, 1):
-                filename = f"{output_name}_part{i}_of_{len(qr_images)}{output_ext}"
-                filepath = output_dir / filename
-                qr_image.save(str(filepath))
-                saved_files.append(filepath)
-                logger.info(f"QR code {i}/{len(qr_images)} saved: {filepath}")
-
-            # Optional: Save QR texts to file
-            if args.save_texts:
-                text_file = output_dir / f"{output_name}_qr_texts.txt"
-                with open(text_file, 'w') as f:
-                    for i, text in enumerate(qr_texts, 1):
-                        f.write(f"# Part {i}/{len(qr_texts)}\n")
-                        f.write(text + "\n\n")
-                logger.info(f"QR texts saved: {text_file}")
-
+        if args.output:
+            output_base = Path(args.output)
+            output_dir = output_base.parent
+            output_name = output_base.stem
+            output_ext = output_base.suffix or '.png'
         else:
-            # Single-part
-            output_file = Path(args.output) if args.output else input_file.with_suffix('.png')
-            qr_images.save(str(output_file))
-            logger.info(f"QR code successfully saved: {output_file}")
+            output_dir = input_paths[0].parent
+            output_name = input_paths[0].stem if len(input_paths) == 1 else "archive"
+            output_ext = '.png'
+
+        if len(images) == 1:
+            filepath = output_dir / f"{output_name}{output_ext}"
+            images[0].save(str(filepath))
+            logger.info(f"QR code successfully saved: {filepath}")
 
             if args.show_text:
-                print(f"\nQR code text:\n{qr_texts}\n")
+                print(f"\nQR code text:\n{texts[0]}\n")
+        else:
+            logger.info(f"Content was split into {len(images)} QR codes")
+
+            for i, qr_image in enumerate(images, 1):
+                filename = f"{output_name}_part{i}_of_{len(images)}{output_ext}"
+                filepath = output_dir / filename
+                qr_image.save(str(filepath))
+                logger.info(f"QR code {i}/{len(images)} saved: {filepath}")
+
+        # Optional: Save QR texts to file
+        if args.save_texts:
+            text_file = output_dir / f"{output_name}_qr_texts.txt"
+            with open(text_file, 'w') as f:
+                for i, text in enumerate(texts, 1):
+                    f.write(f"# Part {i}/{len(texts)}\n")
+                    f.write(text + "\n\n")
+            logger.info(f"QR texts saved: {text_file}")
 
         return 0
 
-    except service.FileTooLargeError as e:
-        logger.error(str(e))
-        return 1
     except Exception as e:
         logger.error(f"Error generating QR code: {e}")
         if args.verbose:
@@ -123,22 +114,12 @@ def read_qr(args):
             qr_texts = service.read_multiple_qr_from_images([str(p) for p in input_paths])
             logger.info(f"{len(qr_texts)} QR codes successfully read.")
 
-        # Check if multi-part
-        is_multipart = service.is_multipart_qr(qr_texts[0])
-
-        if is_multipart:
-            part_num, total_parts = service.get_multipart_info(qr_texts[0])
-            logger.info(f"Multi-part QR code detected (part {part_num}/{total_parts})")
-
-            if len(qr_texts) < total_parts:
-                logger.warning(f"Only {len(qr_texts)} of {total_parts} parts loaded!")
-
         if args.show_text:
             for i, text in enumerate(qr_texts, 1):
                 print(f"\n--- QR Code {i} ---")
                 print(text[:200] + "..." if len(text) > 200 else text)
 
-        # If --output provided, decrypt directly
+        # If --output provided, decrypt and extract directly
         if args.output:
             password = args.password or getpass.getpass("Enter password: ")
 
@@ -146,31 +127,14 @@ def read_qr(args):
                 logger.error("Password cannot be empty.")
                 return 1
 
-            from app import qr_data_class
             try:
-                raw_data, filename, timestamp = service.decrypt_qr_data(qr_texts, password)
-
-                output_file = Path(args.output)
-
-                # If output is a directory, use suggested filename
-                if output_file.is_dir() and filename:
-                    output_file = output_file / filename
-                    logger.info(f"Using suggested filename: {filename}")
-
-                with open(output_file, 'wb') as f:
-                    f.write(raw_data)
-
-                logger.info(f"File successfully decrypted and saved: {output_file}")
-
-                # Show timestamp if available
-                if timestamp:
-                    import time
-                    timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
-                    logger.info(f"Original file created: {timestamp_str}")
-
+                extracted = service.decrypt_qr_data(qr_texts, password, args.output)
+                logger.info(f"{len(extracted)} file(s) extracted to: {args.output}")
+                for path in extracted:
+                    logger.info(f"  {path}")
                 return 0
 
-            except qr_data_class.DecryptionError as e:
+            except qr_multi_part.DecryptionError as e:
                 logger.error(f"Decryption failed: {e}")
                 return 1
 
@@ -218,7 +182,7 @@ def decrypt_text(args):
         qr_texts = [args.text]
 
     if not args.output:
-        logger.error("Output file must be specified (--output).")
+        logger.error("Output directory must be specified (--output).")
         return 1
 
     password = args.password or getpass.getpass("Enter password: ")
@@ -227,31 +191,14 @@ def decrypt_text(args):
         logger.error("Password cannot be empty.")
         return 1
 
-    from app import qr_data_class
     try:
-        raw_data, filename, timestamp = service.decrypt_qr_data(qr_texts, password)
-
-        output_file = Path(args.output)
-
-        # If output is a directory, use suggested filename
-        if output_file.is_dir() and filename:
-            output_file = output_file / filename
-            logger.info(f"Using suggested filename: {filename}")
-
-        with open(output_file, 'wb') as f:
-            f.write(raw_data)
-
-        logger.info(f"File successfully decrypted and saved: {output_file}")
-
-        # Show timestamp if available
-        if timestamp:
-            import time
-            timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
-            logger.info(f"Original file created: {timestamp_str}")
-
+        extracted = service.decrypt_qr_data(qr_texts, password, args.output)
+        logger.info(f"{len(extracted)} file(s) extracted to: {args.output}")
+        for path in extracted:
+            logger.info(f"  {path}")
         return 0
 
-    except qr_data_class.DecryptionError as e:
+    except qr_multi_part.DecryptionError as e:
         logger.error(f"Decryption failed: {e}")
         return 1
     except Exception as e:
@@ -268,23 +215,23 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Generate single-part QR code
+  # Generate QR code(s) from a single file
   %(prog)s generate -i small_file.txt -o qrcode.png
 
-  # Generate multi-part QR codes (large file)
-  %(prog)s generate -i large_file.pdf
+  # Generate QR code(s) from multiple files and/or a folder
+  %(prog)s generate -i file_a.txt file_b.pdf some_folder/
 
-  # Read single QR code
-  %(prog)s read -i qrcode.png -o restored.txt
+  # Read QR code(s) and extract to a folder
+  %(prog)s read -i qrcode.png -o restored/
 
   # Read multiple QR codes (multi-part)
-  %(prog)s read -i qr_part1.png qr_part2.png qr_part3.png -o file.pdf
+  %(prog)s read -i qr_part1.png qr_part2.png qr_part3.png -o restored/
 
   # Decrypt text directly
-  %(prog)s decrypt -t "BASE64STRING..." -o file.txt
+  %(prog)s decrypt -t "BASE64STRING..." -o restored/
 
   # Multi-part from text file
-  %(prog)s decrypt --text-file qr_texts.txt -o file.pdf
+  %(prog)s decrypt --text-file qr_texts.txt -o restored/
         """
     )
 
@@ -299,16 +246,17 @@ Examples:
     # Generate Command
     generate_parser = subparsers.add_parser(
         'generate',
-        help='Generates QR code(s) from a file'
+        help='Generates QR code(s) from one or more files/directories'
     )
     generate_parser.add_argument(
         '-i', '--input',
         required=True,
-        help='Input file'
+        nargs='+',
+        help='Input file(s) and/or directory(ies)'
     )
     generate_parser.add_argument(
         '-o', '--output',
-        help='Output file/prefix for QR code(s) (default: <input>_partX.png)'
+        help='Output file/prefix for QR code(s) (default: derived from input)'
     )
     generate_parser.add_argument(
         '-p', '--password',
@@ -343,7 +291,7 @@ Examples:
     )
     read_parser.add_argument(
         '-o', '--output',
-        help='Output file (automatically decrypts if provided). Can be a directory, filename will be suggested.'
+        help='Output directory (automatically decrypts and extracts here if provided).'
     )
     read_parser.add_argument(
         '-p', '--password',
@@ -372,7 +320,7 @@ Examples:
     decrypt_parser.add_argument(
         '-o', '--output',
         required=True,
-        help='Output file. Can be a directory, filename will be suggested.'
+        help='Output directory to extract the recovered files/folders into.'
     )
     decrypt_parser.add_argument(
         '-p', '--password',

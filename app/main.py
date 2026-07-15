@@ -4,6 +4,7 @@
 import logging
 import tkinter
 from tkinter import filedialog, messagebox
+from typing import List
 
 from app.controller import QrExchangeController
 from app import extra_windows
@@ -17,9 +18,10 @@ class GuiClass:
         logger.debug("init gui")
         self.root = tkinter.Tk()
         self.root.title("PyQrDataExchange")
-        self.root.geometry("400x150")
+        self.root.geometry("480x150")
 
         self.controller = QrExchangeController(MAX_QR_CODE_BYTES)
+        self.selected_paths: List[str] = []
 
         label = tkinter.Label(self.root, text=" ")
         label.grid(row=0, column=0, columnspan=4)
@@ -37,17 +39,23 @@ class GuiClass:
         )
         self.entry_password.grid(row=1, column=1, padx=5, pady=5, sticky="nw")
 
-        self.label_filename = tkinter.Label(self.root, text="Filename:")
+        self.label_filename = tkinter.Label(self.root, text="Files/Folder:")
         self.label_filename.grid(row=2, column=0, padx=5, pady=5, sticky=tkinter.E)
 
-        self.entry_filename = tkinter.Entry(self.root, width=30)
+        self.entry_filename = tkinter.Entry(self.root, width=30, state="readonly")
         self.entry_filename.grid(row=2, column=1, padx=5, pady=5, sticky="nw")
 
-        self.button_filemanager = tkinter.Button(
-            self.root, text="Browse",
-            command=self.click_button_filemanager
+        self.button_browse_files = tkinter.Button(
+            self.root, text="Browse Files",
+            command=self.click_button_browse_files
         )
-        self.button_filemanager.grid(row=2, column=2)
+        self.button_browse_files.grid(row=2, column=2)
+
+        self.button_browse_folder = tkinter.Button(
+            self.root, text="Browse Folder",
+            command=self.click_button_browse_folder
+        )
+        self.button_browse_folder.grid(row=2, column=3)
 
         label2 = tkinter.Label(self.root, text=" ")
         label2.grid(row=3, column=0, columnspan=3)
@@ -78,8 +86,8 @@ class GuiClass:
         if not self.password_var.get():
             messagebox.showerror("Error", "Please enter a password.")
             return False
-        if check_filename and not self.entry_filename.get():
-            messagebox.showerror("Error", "Please select a file.")
+        if check_filename and not self.selected_paths:
+            messagebox.showerror("Error", "Please select file(s) or a folder.")
             return False
         return True
 
@@ -87,27 +95,26 @@ class GuiClass:
         if not self._validate_inputs():
             return
 
-        filepath = self.entry_filename.get()
         password = self.password_var.get()
 
         self._disable_ui()
 
         self.controller.generate_qr_async(
-            filepath,
+            self.selected_paths,
             password,
             on_success=self._on_generate_success,
             on_error=self._on_generate_error,
         )
 
-    def _on_generate_success(self, qr_image, qr_text):
+    def _on_generate_success(self, qr_images, qr_texts):
         """Called from worker thread - schedule UI update in main thread"""
-        logger.info(f"Generate success callback. Type: {type(qr_image)}, Is list: {isinstance(qr_image, list)}")
+        logger.info(f"Generate success callback. {len(qr_images)} QR code(s)")
 
         def show_window():
             try:
                 self._enable_ui()
                 logger.info("Creating QrWindow from main thread")
-                extra_windows.QrWindow(self.root, qr_image, qr_text)
+                extra_windows.QrWindow(self.root, qr_images, qr_texts)
             except Exception as e:
                 logger.error(f"Error creating QrWindow: {e}")
                 logger.exception("Full traceback:")
@@ -126,18 +133,34 @@ class GuiClass:
 
         self.root.after(0, show_error)
 
-    def click_button_filemanager(self):
-        filetypes = [("all files", "*.*"), ("PNG files", "*.png")]
-        fp = filedialog.askopenfilename(filetypes=filetypes)
-        if fp:
-            self.entry_filename.delete(0, tkinter.END)
-            self.entry_filename.insert(0, fp)
+    def click_button_browse_files(self):
+        filepaths = filedialog.askopenfilenames(filetypes=[("all files", "*.*")])
+        if filepaths:
+            self.selected_paths = list(filepaths)
+            self._update_filename_display()
+
+    def click_button_browse_folder(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.selected_paths = [folder]
+            self._update_filename_display()
+
+    def _update_filename_display(self):
+        text = self.selected_paths[0] if len(self.selected_paths) == 1 else f"{len(self.selected_paths)} items selected"
+        self.entry_filename.config(state="normal")
+        self.entry_filename.delete(0, tkinter.END)
+        self.entry_filename.insert(0, text)
+        self.entry_filename.config(state="readonly")
 
     def click_button_read_qr(self):
         if not self._validate_inputs(check_filename=True):
             return
 
-        filepath = self.entry_filename.get()
+        if len(self.selected_paths) != 1:
+            messagebox.showerror("Error", "Please select exactly one QR code image (use 'Browse Files').")
+            return
+
+        filepath = self.selected_paths[0]
         password = self.password_var.get()
 
         self.controller.read_qr_from_image_async(
