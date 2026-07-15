@@ -259,12 +259,15 @@ if __name__ == "__main__":
             assert f.read() == "hello world"
         logger.info("Single small file: OK")
 
-        # Large file -> multi-part, shuffled reassembly
+        # Large file -> multi-part, shuffled reassembly.
+        # Kept deliberately small: every part runs its own full Argon2i
+        # derivation (~0.3s each), so a part count in the single digits is
+        # plenty to exercise the multi-part path without a slow self-test.
         large_file = os.path.join(workdir, "large.bin")
         with open(large_file, "wb") as f:
-            f.write(os.urandom(20_000))
+            f.write(os.urandom(2_500))
 
-        qr_strings = MultiPartQrProcessor.serialize_paths([large_file], password, max_qr_bytes=500)
+        qr_strings = MultiPartQrProcessor.serialize_paths([large_file], password, max_qr_bytes=800)
         assert len(qr_strings) > 1, "expected multiple parts for a large file"
 
         shuffled = qr_strings.copy()
@@ -313,7 +316,7 @@ if __name__ == "__main__":
         logger.info("Whole folder (nested): OK")
 
         # Missing parts should raise a clear error
-        qr_strings = MultiPartQrProcessor.serialize_paths([large_file], password, max_qr_bytes=500)
+        qr_strings = MultiPartQrProcessor.serialize_paths([large_file], password, max_qr_bytes=800)
         try:
             MultiPartQrProcessor.deserialize_to_bytes(qr_strings[:-1], password)
             assert False, "expected ValueError for missing parts"
