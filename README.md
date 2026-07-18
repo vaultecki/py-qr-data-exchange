@@ -1,268 +1,220 @@
 # PyQrDataExchange
 
-Secure file transfer via QR codes with encryption, compression, and automatic multi-part splitting for large payloads.
+Transfers files via QR codes: the input is bundled into a tar archive, compressed with LZMA, encrypted, and encoded as one or more QR codes. Intended for offline transfer where no network connection is available or desired.
 
 ## Features
 
-- 🔒 **Encryption**: NaCl SecretBox with Argon2i password-based key derivation
-- 🗜️ **Compression**: LZMA compresses the bundled content before encryption
-- 📱 **QR Code Generation**: Convert files/folders to QR codes for easy, offline transfer
-- 📦 **Multiple Files & Folders**: Bundle any number of files and/or entire directories (with subfolders) into a single encrypted transfer
-- 🔄 **Multi-Part Support**: Large payloads are automatically split across as many QR codes as needed
-- 🖥️ **GUI & CLI**: User-friendly graphical interface and powerful command-line tools
-- 🕵️ **Self-Contained Parts**: Each QR code authenticates itself independently (NaCl MAC); part numbers and total-part counts are only visible after successful decryption, never in plaintext
-- 🔀 **Flexible Reading**: Multi-part QR codes can be scanned/loaded in any order
+- Encryption: NaCl SecretBox with Argon2i password-based key derivation
+- Compression: LZMA compresses the bundled content before encryption
+- Bundles any number of files and/or whole directories (recursively) into one transfer
+- Automatic multi-part splitting: large payloads are split across as many QR codes as needed
+- GUI (Tkinter) and CLI, both built on the same core library
+- Each QR code is encrypted independently (own salt, own Argon2i derivation, own SecretBox); part number and total-part count are only visible after successful decryption
+- Multi-part QR codes can be scanned/loaded in any order
 
 ## Installation
 
-### Standard Installation (Recommended)
+### Standard
 
 ```bash
-# Clone or download the repository
 git clone <repository-url>
 cd py-qr-data-exchange
-
-# Install all dependencies
 pip install -r requirements.txt
 ```
 
-### Minimal Installation
+### Minimal
 
-For resource-constrained environments or minimal dependencies:
+Uses OpenCV instead of `qreader` for QR detection (smaller install):
 
 ```bash
-# Uses OpenCV instead of qreader (smaller footprint)
 pip install -r requirements-minimal.txt
 ```
 
-### Development Installation
+### Development
 
-For contributors and developers:
+Includes pytest and lint/type-check tools:
 
 ```bash
-# Includes testing, linting, and documentation tools
 pip install -r requirements-dev.txt
 ```
 
-### Manual Installation
+### Manual
 
-If you prefer to install packages individually:
-
-**Recommended (best QR code detection):**
 ```bash
+# with qreader (better detection)
 pip install pillow qrcode qreader pynacl msgpack
-```
 
-**Minimum (uses OpenCV fallback):**
-```bash
+# without qreader (OpenCV fallback only)
 pip install pillow qrcode opencv-python pynacl msgpack
 ```
 
-Compression (`lzma`) and archiving (`tarfile`) are part of the Python standard library — no extra package needed for either.
+`lzma` and `tarfile` are part of the Python standard library; no extra package needed.
 
-### Python Version
+### Python version
 
-- Python 3.7 or higher
-- Python 3.12+ is recommended: tar extraction uses the safe `filter='data'` sandbox added in 3.12 to guard against path-traversal in untrusted archives; on older versions a manual path check is used instead.
+- Python 3.7 or higher.
+- Python 3.12+ uses the standard library's `filter='data'` sandbox for tar extraction (path-traversal guard). Below 3.12, a manual path check is used instead.
 
-### Why qreader?
+### qreader vs. OpenCV
 
-The application uses `qreader` for improved QR code detection:
-- ✅ **Better detection**: More robust than OpenCV
-- ✅ **Handles difficult cases**: Rotated, blurry, or low-contrast QR codes
-- ✅ **Automatic fallback**: Falls back to OpenCV if qreader not available
-- ✅ **Optional**: Works with OpenCV alone, but qreader recommended
+`qreader` generally detects QR codes more reliably than plain OpenCV, in particular for rotated, blurry, or low-contrast images. It's an optional dependency; if it isn't installed, the OpenCV detector is used instead. `requirements-minimal.txt` omits it for a smaller install.
 
-## Quick Start
+## Quick start
 
-### GUI Application
+GUI:
 
 ```bash
 python run_app.py
 ```
 
-Or:
+CLI:
 
 ```bash
-python -m app.main
-```
-
-### CLI Usage
-
-```bash
-# Generate QR code(s) from a file
 python -m app.cli generate -i myfile.txt -o qrcode.png
-
-# Read QR code(s) and decrypt into a folder
 python -m app.cli read -i qrcode.png -o restored/
 ```
 
-## GUI Usage
+## GUI usage
 
-### Encrypting Files/Folders to QR Codes
+### Encrypting files/folders to QR codes
 
-1. **Launch the application**
-   ```bash
-   python run_app.py
-   ```
+1. Start the app: `python run_app.py`
+2. Enter a password (required; no length limit).
+3. Select input:
+   - "Browse Files": one or more files (multi-select supported)
+   - "Browse Folder": a whole directory, added recursively
+4. Click "Generate QR". Each QR code involves its own key derivation, so payloads needing many QR codes take correspondingly longer than a single one.
+5. A navigation window opens (used the same way for one part or many):
+   - "◄ Previous" / "Next ►" to browse parts
+   - "Save Current": save the currently displayed QR code image
+   - "Save All": save all QR codes to a folder, including `.txt` files with the QR text (these can be re-imported directly when decrypting)
 
-2. **Enter a password**
-   - Password is required for encryption/decryption
-   - Use a strong, memorable password — there's no length limit, so a long passphrase is a good choice
+### Decrypting QR codes
 
-3. **Select input**
-   - **"Browse Files"**: pick one or more files (hold `Ctrl`/`Cmd` to multi-select)
-   - **"Browse Folder"**: pick a whole directory (added recursively, subfolders included)
-   - The field next to the buttons shows the selected path, or a count like "3 items selected"
+1. Enter the password used for encryption.
+2. Click "Read QR Code(s)".
+3. Add parts in any order:
+   - "Add QR Code File(s)": select QR code images (`.png`/`.jpg`) and/or `.txt` files from "Save All"; multi-select supported.
+   - Or paste a QR code's text into the text field and click "Add". Multiple concatenated texts (base64 blobs ending in `==`) are split automatically.
+   - The status label shows "X/Y parts loaded" once at least one part has decrypted (Y is only known at that point, since it's encrypted).
+4. "Decrypt and Extract to Folder" is enabled once all parts 1..Y are loaded.
+5. Click it and choose an output folder; all recovered files and folder structure are extracted there.
 
-4. **Generate QR Code**
-   - Click "Generate QR"
-   - Wait for processing — every QR code involves its own password-hashing step, so larger payloads that need many QR codes take noticeably longer than a single one
+A part that fails to decrypt (wrong password, corrupted, or from a different transfer) is rejected with an explanation when added, rather than only failing at the final decrypt step.
 
-5. **View and Save**
-   - A navigation window opens (used for one part just as much as for many):
-     - Browse through parts with "◄ Previous" / "Next ►"
-     - "Save Current": Save the currently displayed QR code image
-     - "Save All": Save all QR codes to a folder (includes `.txt` files with the QR text — these can be re-imported directly when decrypting, see below)
+## CLI usage
 
-### Decrypting QR Codes
+`-v`/`--verbose` is a global flag and must come before the subcommand: `python -m app.cli -v generate ...`.
 
-1. **Enter password** (same as used for encryption)
-2. **Click "Read QR Code(s)"**
-3. **Add parts**, in any order, mixing both ways as needed:
-   - **"Add QR Code File(s)"**: pick one or more QR code images (`.png`/`.jpg`) and/or the `.txt` files saved by "Save All" — each file is one part. Select multiple at once: hold `Ctrl` (Windows/Linux) or `Cmd` (macOS), or use Ctrl+A / Shift+Click in the file dialog.
-   - **Type or paste** a QR code's text into the text field and click **"Add"**. Pasting several concatenated texts (base64 blobs ending in `==`) is auto-detected and split into individual parts.
-   - The status label shows **"X/Y parts loaded"** once at least one part has decrypted successfully (Y only becomes known at that point — it's encrypted, not visible beforehand).
-4. **"Decrypt and Extract to Folder"** stays disabled until every part (1..Y) is loaded, then becomes clickable.
-5. Click it and **choose an output folder** — all recovered files (and folder structure) are extracted there.
-
-A part that fails to decrypt (wrong password, corrupted, or belonging to a different transfer) is rejected immediately with an explanation when you try to add it, rather than only surfacing as a failure at the final decrypt step.
-
-## CLI Usage
-
-`-v`/`--verbose` is a global flag and must come **before** the subcommand, e.g. `python -m app.cli -v generate ...`.
-
-### Generate QR Codes
+### Generate
 
 ```bash
-# Basic usage (single file)
+# single file
 python -m app.cli generate -i input_file.txt
 
-# Multiple files and/or a whole folder, bundled together
+# multiple files and/or a folder, bundled together
 python -m app.cli generate -i file_a.txt file_b.pdf some_folder/
 
-# With custom output prefix
+# custom output prefix
 python -m app.cli generate -i input_file.txt -o my_qr.png
 
-# Specify password via command line (not recommended for security)
+# password via argument (visible in shell history/process list)
 python -m app.cli generate -i input_file.txt -p mypassword
 
-# Multi-part with text file export
+# also write the QR text(s) to a .txt file
 python -m app.cli generate -i large_file.pdf --save-texts
 
-# Custom max size per QR code
+# custom max size per QR code
 python -m app.cli generate -i file.txt --max-size 2000
 ```
 
-**Multi-Part Output:**
-When the content is split into multiple parts:
+When the content is split into multiple parts, output looks like:
+
 ```
 input_file_part1_of_3.png
 input_file_part2_of_3.png
 input_file_part3_of_3.png
-input_file_qr_texts.txt  (if --save-texts used)
+input_file_qr_texts.txt  (if --save-texts was used)
 ```
 
-### Read QR Codes
+### Read
 
-`-o`/`--output` for `read` is a **folder** — if given, the QR code(s) are decrypted and everything they contain is extracted into it.
+`-o`/`--output` is a directory; if given, the QR code(s) are decrypted and extracted into it.
 
 ```bash
-# Read single QR code (shows text only, no decryption)
+# print text only, no decryption
 python -m app.cli read -i qrcode.png
 
-# Read and decrypt into a folder
+# decrypt and extract
 python -m app.cli read -i qrcode.png -o restored/
 
-# Read multiple QR codes (multi-part) and extract
+# multiple parts
 python -m app.cli read -i qr_part*.png -o restored/
 
-# Read specific parts
-python -m app.cli read -i part1.png part2.png part3.png -o restored/
-
-# Show QR text content
+# show QR text content
 python -m app.cli read -i qrcode.png --show-text
 ```
 
-### Decrypt from Text
+### Decrypt from text
 
-`-o`/`--output` for `decrypt` is **required** and is also a folder.
+`-o`/`--output` is required and is a directory.
 
 ```bash
-# Decrypt a single QR text
 python -m app.cli decrypt -t "BASE64STRING..." -o restored/
-
-# Decrypt from a text file (multi-part)
 python -m app.cli decrypt --text-file qr_texts.txt -o restored/
 ```
 
-### Verbose Mode
+## Password guidelines
 
-```bash
-python -m app.cli -v generate -i file.txt
-```
+- No length limit; Argon2i's cost doesn't depend on password length, so a long passphrase costs nothing extra.
+- There is no password recovery. Losing the password means the data cannot be recovered.
+- Keep the password separate from the QR codes.
 
-## Password Guidelines
+## Size limits
 
-- **Length**: No limit — a longer passphrase is stronger and Argon2i's cost doesn't depend on password length
-- **Strength**: Use a mix of letters, numbers, and symbols, or a long passphrase
-- **Storage**: Keep passwords secure and separate from QR codes
-- **Recovery**: Lost passwords = lost data (by design for security)
+- Default limit per QR code: ~2953 bytes, adjustable with `--max-size`. After per-part encryption/msgpack/base64 overhead, roughly ~2000 bytes of that is actual compressed payload.
+- No overall limit; content is split across as many QR codes as needed. A 10 KB payload after compression typically needs around 4-5 QR codes at the default size.
 
-## File Size Limits
-
-- **Default limit per QR code**: ~2953 bytes (customizable with `--max-size`), which after the per-part encryption/msgpack/base64 overhead leaves roughly ~2000 bytes of actual (compressed) payload per QR code
-- **No hard limit overall**: content is automatically split across as many QR codes as needed
-- **Example**: a 10 KB payload after compression typically needs ~4-5 QR codes at the default size
-
-## How It Works
+## How it works
 
 ### Pipeline
 
-**Generating QR codes:**
+Generating:
+
 ```
 File(s) / Folder(s)
-  → tar (bundle, preserving relative paths)
-  → LZMA compress (once, over the whole archive)
-  → split into chunks (sized to fit max-size per QR code)
-  → per chunk: fresh random salt → Argon2i key derivation → NaCl SecretBox encrypt
-  → base64
-  → QR code image
+  -> tar (bundle, preserving relative paths)
+  -> LZMA compress (once, over the whole archive)
+  -> split into chunks sized to fit max-size per QR code
+  -> per chunk: fresh random salt -> Argon2i key derivation -> NaCl SecretBox encrypt
+  -> base64
+  -> QR code image
 ```
 
-**Reading QR codes:**
+Reading:
+
 ```
 QR code(s)
-  → base64 decode
-  → per part: read its own salt → Argon2i key derivation → NaCl SecretBox decrypt
-  → validate all parts agree on the total count and none are missing
-  → sort by part number, concatenate
-  → LZMA decompress
-  → tar extract (into the chosen output folder)
+  -> base64 decode
+  -> per part: read its own salt -> Argon2i key derivation -> NaCl SecretBox decrypt
+  -> validate all parts agree on total count, none missing
+  -> sort by part number, concatenate
+  -> LZMA decompress
+  -> tar extract into the chosen output folder
 ```
 
-### Wire Format
+### Wire format
 
-Every QR code carries the same self-contained structure — there is no separate "single-file" format; a payload that fits in one QR code is simply the `t == 1` case:
+Every QR code has the same structure; a payload that fits in one QR code is simply the `t == 1` case.
 
 ```python
-# What's visible without the password:
+# visible without the password:
 base64(msgpack({
-    's': salt,             # bytes — this part's own Argon2i salt
+    's': salt,             # bytes - this part's own Argon2i salt
     'e': encrypted_inner,  # NaCl SecretBox ciphertext (nonce + ciphertext + MAC)
 }))
 
-# What's only visible after successful decryption:
+# only visible after successful decryption:
 {
     'v': 1,             # format version
     'p': part_number,   # 1-indexed
@@ -271,210 +223,155 @@ base64(msgpack({
 }
 ```
 
-Because the part/total-part bookkeeping lives *inside* the ciphertext, nothing about how a payload was split is visible from the QR codes themselves without the password — unlike a design where that metadata sits in plaintext next to the ciphertext.
+Part number and total-part count live inside the ciphertext, so nothing about how a payload was split is visible without the password.
 
-### Key Design Decisions
+### Design decisions
 
-**Every part gets its own full Argon2i key derivation.** Rather than deriving one master key and cheaply re-keying each part from it, every single QR code runs its own independent, full Argon2i pass. This is deliberately the more expensive option: generating or reading a payload split into many parts costs `O(number of parts)` Argon2i runs, which is noticeably slower than a single derivation for large multi-part transfers. The trade-off buys full independence between parts — there is no shared key material anywhere.
+**Every part gets its own full Argon2i derivation.** Rather than deriving one master key and cheaply re-keying each part, each QR code runs an independent, full Argon2i pass. This costs `O(number of parts)` Argon2i runs for generation/reading, which is slower for large multi-part transfers than a shared-key design would be. The trade-off is that parts share no key material.
 
-**Compress once, encrypt per part.** The entire bundle (tar of all input files/folders) is LZMA-compressed exactly once for the best possible ratio; only the resulting compressed byte stream is sliced into per-QR-code chunks. Compressing per chunk instead would badly hurt the ratio for anything but a single QR code.
+**Compress once, encrypt per part.** The whole bundle is LZMA-compressed exactly once; only the resulting stream is sliced into per-QR-code chunks. Compressing per chunk would hurt the compression ratio for anything but a single QR code.
 
-**No separate integrity hash.** Earlier iterations of this format stored a SHA256 hash of the original data to detect corruption or mixed-up parts. That's no longer necessary: NaCl's authenticated encryption (Poly1305 MAC) already detects tampering or corruption of *any individual part*, and parts accidentally mixed across different encryption runs will fail to reassemble into a valid LZMA stream (or a valid tar archive) — so the failure mode is still clear, just surfaced one layer later than an explicit hash check would.
+**No separate integrity hash.** An earlier version of this format stored a SHA256 hash to detect corruption or mixed-up parts; this is no longer needed. NaCl's authenticated encryption (Poly1305 MAC) already detects tampering or corruption of any individual part, and parts mixed across different encryption runs fail to reassemble into a valid LZMA stream or tar archive — the failure is still clear, just surfaces one layer later than an explicit hash check would.
 
-**Order-independent parts.** Parts can be scanned/loaded in any order; they carry their own part number and are sorted before reassembly.
+**Order-independent parts.** Parts carry their own part number and are sorted before reassembly, so they can be scanned or loaded in any order.
 
-**Multiple files/folders via `tar`.** Bundling happens with Python's standard-library `tarfile` before compression, which is also why there's no separate filename field in the format — names and directory structure come from the archive itself.
+**Bundling via tar.** Multiple files/folders are bundled with the standard-library `tarfile` before compression; there is no separate filename field, since names and directory structure come from the archive.
 
-### Error Handling
+### Errors
 
 | Error | Meaning |
 |---|---|
-| `Missing parts: [2, 4]` | Not all parts were loaded/scanned; find and add the missing QR codes |
-| `Inconsistent total_parts across parts` | Parts disagree on how many total parts there should be — likely mixed from different transfers |
-| `Decryption failed. Wrong password or corrupted data.` | A part's own decryption/authentication failed — wrong password, or that specific QR code is corrupted |
-| `Decompression failed. Parts may be corrupted or come from different encryption runs.` | All parts decrypted individually, but didn't reassemble into a valid compressed stream |
-| Unsafe path in archive | The recovered archive contained a member trying to escape the output folder; extraction was refused |
+| `Missing parts: [2, 4]` | Not all parts were loaded/scanned |
+| `Inconsistent total_parts across parts` | Parts disagree on total count, likely mixed from different transfers |
+| `Decryption failed. Wrong password or corrupted data.` | A part's decryption/authentication failed |
+| `Decompression failed. Parts may be corrupted or come from different encryption runs.` | Parts decrypted individually but didn't reassemble into a valid compressed stream |
+| Unsafe path in archive | A recovered archive member tried to escape the output folder; extraction was refused |
 
-### Performance Notes
+### Performance
 
-- Because every part requires its own Argon2i run, both generation and reading scale as `O(number of parts)` in KDF cost — for a handful of QR codes this is unnoticeable, but a large file split into dozens of parts can take several seconds just for key derivation.
-- LZMA with the `9 | PRESET_EXTREME` preset is used for the best compression ratio; this is a one-time cost per generation, independent of how many parts result.
+- Both generation and reading scale as `O(number of parts)` in key-derivation cost. For a handful of parts this is unnoticeable; a file split into dozens of parts can take several seconds for key derivation alone.
+- LZMA uses `9 | PRESET_EXTREME` for the best compression ratio; this is a one-time cost per generation, independent of the number of parts.
 
 ## Security
 
-### Encryption Details
-- **Algorithm**: NaCl SecretBox (XSalsa20 + Poly1305)
-- **Key Derivation**: Argon2i (memory-hard function), run independently per QR code
-- **Salt**: Unique random salt per QR code (not per file — every part has its own)
-- **Authentication**: Built-in MAC per part for tampering detection
+### Encryption details
 
-### Security Best Practices
-1. **Use strong passwords**: Mix characters, numbers, symbols
-2. **Never share passwords with QR codes**: Store separately
-3. **Secure transmission**: QR codes themselves don't reveal the password
-4. **No backdoors**: Encryption is client-side, no key escrow
+- Algorithm: NaCl SecretBox (XSalsa20 + Poly1305)
+- Key derivation: Argon2i, run independently per QR code
+- Salt: unique random salt per QR code
+- Authentication: MAC per part, detects tampering
 
-### What's Protected
-- ✅ File/folder contents (encrypted)
-- ✅ Part bookkeeping — part number and total-part count are encrypted, not plaintext
-- ✅ Against tampering (authenticated encryption per part)
+### What's protected
 
-### What's NOT Hidden
-- ❌ Approximate total size (inferable from the number of QR codes)
-- ❌ The fact that data is encrypted (obvious from the format)
+- File/folder contents (encrypted)
+- Part bookkeeping (part number, total-part count) — encrypted, not plaintext
+- Tampering (authenticated encryption per part)
+
+### What's not hidden
+
+- Approximate total size, inferable from the number of QR codes
+- The fact that the data is encrypted
+
+### Practices worth following
+
+- Use a long password or passphrase.
+- Don't store the password together with the QR codes.
+- There is no password recovery mechanism by design.
 
 ## Troubleshooting
 
-### "Password cannot be empty"
-- Ensure you enter a password before generating/reading
+**"Password cannot be empty"** — enter a password before generating/reading.
 
-### "No QR code found in image"
-- Image might be corrupted or low quality
-- Try rescanning or using a better quality image
-- Ensure the image actually contains a QR code
-- **Install qreader for better detection**: `pip install qreader`
-- Try adjusting image brightness/contrast
-- Ensure QR code is not rotated more than 45 degrees
+**"No QR code found in image"** — the image may be corrupted, low quality, or rotated more than ~45 degrees. Installing `qreader` (`pip install qreader`) improves detection.
 
-### "Decryption failed. Wrong password or corrupted data."
-- Verify you're using the correct password
-- Check if the QR code image is readable
-- For multi-part transfers: ensure all parts are loaded
+**"Decryption failed. Wrong password or corrupted data."** — check the password, and for multi-part transfers, that all parts are loaded.
 
-### "Missing parts: [X, Y, Z]"
-- Not all multi-part QR codes were loaded
-- Find and load the missing parts (part numbers only become visible after successful decryption of that part, not from the filename)
+**"Missing parts: [X, Y, Z]"** — not all parts were loaded; part numbers only become visible after a part decrypts successfully, not from the filename.
 
-### "Decompression failed. Parts may be corrupted or come from different encryption runs."
-- Each part decrypted on its own, but doesn't fit together — likely parts from two different generations were mixed
-- Re-scan the QR codes and make sure they all belong to the same transfer
+**"Decompression failed. Parts may be corrupted or come from different encryption runs."** — each part decrypted individually but doesn't fit together, likely parts from two different generations were mixed. Re-scan and confirm all parts belong to the same transfer.
 
-### GUI Window Not Opening (Multi-Part)
-- Check console for error messages
-- Ensure all dependencies are installed
-- Try running with verbose logging: `python run_app.py` (console shows logs)
+**GUI window not opening (multi-part)** — check the console for errors, confirm dependencies are installed, and run with `-v` for more logging.
 
 ## Examples
 
-### Example 1: Encrypt a Text File
+### Single file
 
 ```bash
-# Create test file
 echo "Secret message!" > secret.txt
-
-# Generate QR code
 python -m app.cli generate -i secret.txt
-# Password prompt: mypassword
-
-# Output: secret.png
+# -> secret.png
 ```
 
-### Example 2: Multiple Files and a Folder, Large Enough for Multi-Part
+### Multiple files and a folder, multi-part
 
 ```bash
-# Bundle two files and a folder into one encrypted transfer
 python -m app.cli generate -i notes.txt photo.jpg documents/ --save-texts
-# Password: strongpass123
-
-# Output (if it needs, say, 4 parts):
-# archive_part1_of_4.png
-# archive_part2_of_4.png
-# archive_part3_of_4.png
-# archive_part4_of_4.png
+# if it needs 4 parts:
+# archive_part1_of_4.png ... archive_part4_of_4.png
 # archive_qr_texts.txt
 
-# Read all parts back and extract
 python -m app.cli read -i archive_part*.png -o restored/
-# Password: strongpass123
 # -> restored/notes.txt, restored/photo.jpg, restored/documents/...
 ```
 
-### Example 3: GUI Workflow
+### GUI workflow
 
-1. Start GUI: `python run_app.py`
-2. Password: `test123`
-3. "Browse Files" or "Browse Folder" to select input
-4. Click "Generate QR"
-5. Navigate through QR codes (if multi-part)
-6. Click "Save All" → Select folder
-7. Share QR code images
+Encrypt: start `run_app.py` -> enter password -> "Browse Files"/"Browse Folder" -> "Generate QR" -> "Save All" -> share the images.
 
-To decrypt:
-1. Start GUI: `python run_app.py`
-2. Password: `test123`
-3. Click "Read QR Code(s)"
-4. "Add QR Code File(s)" for each part (images or `.txt` files)
-5. Status: "4/4 parts loaded" → "Decrypt and Extract to Folder" becomes clickable
-6. Click it → choose output folder
-7. Files restored!
+Decrypt: start `run_app.py` -> enter the same password -> "Read QR Code(s)" -> "Add QR Code File(s)" for each part -> once "N/N parts loaded" is shown, click "Decrypt and Extract to Folder" -> choose output folder.
 
 ## Development
 
-### Project Structure
+### Project structure
 
 ```
 py-qr-data-exchange/
 ├── app/
-│   ├── __init__.py
 │   ├── main.py              # GUI application
-│   ├── cli.py               # Command-line interface
-│   ├── controller.py        # GUI controller
+│   ├── cli.py               # command-line interface
+│   ├── controller.py        # GUI controller (background threads)
 │   ├── service.py           # QR generation/reading orchestration
-│   ├── qr_multi_part.py     # Packaging, per-part encryption, reassembly, tar extraction
-│   ├── crypt_utils.py       # Encryption utilities (Argon2i + NaCl SecretBox)
+│   ├── qr_multi_part.py     # packaging, per-part encryption, reassembly, tar extraction
+│   ├── crypt_utils.py       # Argon2i + NaCl SecretBox
 │   └── extra_windows.py     # GUI windows
-├── run_app.py               # Application entry point
-└── README.md                # This file
+├── tests/                   # pytest suite
+├── run_app.py                # application entry point
+└── README.md
 ```
 
-### Running Tests
-
-There is no separate pytest suite; each core module has a `__main__` self-test block instead:
+### Running tests
 
 ```bash
-# Test crypto utilities
+pytest
+```
+
+Each core module also has a `__main__` self-test for a quick manual check without pytest:
+
+```bash
 python -m app.crypt_utils
-
-# Test packaging/encryption/reassembly (single file, multi-part, multiple files, whole folders)
 python -m app.qr_multi_part
-
-# Test the generate/read/decrypt orchestration
 python -m app.service
 ```
 
 ## License
 
-Copyright [2025] [ecki]
+Copyright 2025 ecki
 SPDX-License-Identifier: Apache-2.0
 
 ## Contributing
 
-Contributions welcome! Please ensure:
-- Code follows existing style
-- All tests pass
-- Security considerations are documented
+Contributions are welcome. Please keep the code style consistent, make sure tests pass, and document any security-relevant changes.
 
 ## FAQ
 
-**Q: What's the maximum payload size?**
-A: No hard limit. Content is automatically split into multiple QR codes. The practical limit is how many QR codes you're willing to generate/manage/scan, and how long you're willing to wait for the per-part key derivation.
+**What's the maximum payload size?** No hard limit. Content is split into as many QR codes as needed; in practice the limit is how many QR codes you're willing to generate/manage/scan, and how long you're willing to wait for per-part key derivation.
 
-**Q: Are QR codes compatible between versions of this tool?**
-A: The wire format is versioned (`'v'` field inside the encrypted payload) for future extensibility, but this format is a clean break from earlier releases — QR codes generated by older versions of this tool are not readable by this version.
+**Are QR codes compatible between versions of this tool?** The wire format is versioned (`'v'` field inside the encrypted payload) for future extensibility, but the current format is a clean break from earlier releases — QR codes from older versions are not readable by this version.
 
-**Q: Can I send multiple files or a whole folder?**
-A: Yes — `generate` accepts any number of files and/or directories and bundles them (with their relative structure) into one encrypted transfer.
+**Can I send multiple files or a whole folder?** Yes; `generate` accepts any number of files and/or directories and bundles them, preserving relative structure, into one encrypted transfer.
 
-**Q: Can I change the password later?**
-A: No. Decrypt with the old password, then encrypt with the new password.
+**Can I change the password later?** No. Decrypt with the old password, then generate again with the new one.
 
-**Q: Do I need an internet connection?**
-A: No. Everything runs locally.
+**Do I need an internet connection?** No; everything runs locally.
 
-**Q: Can QR codes be printed?**
-A: Yes! Ensure sufficient DPI (300+ recommended) for reliable scanning.
-
-## Support
-
-For issues, questions, or contributions, see the project repository.
-
+**Can QR codes be printed?** Yes; 300+ DPI is recommended for reliable scanning.
