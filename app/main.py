@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import queue
 import tkinter
 from tkinter import filedialog, messagebox
+from typing import List
 
 from app.controller import QrExchangeController
 from app import extra_windows
@@ -17,37 +19,42 @@ class GuiClass:
         logger.debug("init gui")
         self.root = tkinter.Tk()
         self.root.title("PyQrDataExchange")
-        self.root.geometry("400x150")
+        self.root.geometry("480x150")
 
         self.controller = QrExchangeController(MAX_QR_CODE_BYTES)
+        self.selected_paths: List[str] = []
 
         label = tkinter.Label(self.root, text=" ")
         label.grid(row=0, column=0, columnspan=4)
 
-        self.label_password = tkinter.Label(self.root, text="Password [1-20]:")
+        self.label_password = tkinter.Label(self.root, text="Password:")
         self.label_password.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.E)
 
         self.password_var = tkinter.StringVar(self.root, "")
-        reg = self.root.register(self.entry_password_validate)
         self.entry_password = tkinter.Entry(
-            self.root, width=21, validate="key",
-            validatecommand=(reg, '%P'),
+            self.root, width=21,
             show='*',
             textvariable=self.password_var
         )
         self.entry_password.grid(row=1, column=1, padx=5, pady=5, sticky="nw")
 
-        self.label_filename = tkinter.Label(self.root, text="Filename:")
+        self.label_filename = tkinter.Label(self.root, text="Files/Folder:")
         self.label_filename.grid(row=2, column=0, padx=5, pady=5, sticky=tkinter.E)
 
-        self.entry_filename = tkinter.Entry(self.root, width=30)
+        self.entry_filename = tkinter.Entry(self.root, width=30, state="readonly")
         self.entry_filename.grid(row=2, column=1, padx=5, pady=5, sticky="nw")
 
-        self.button_filemanager = tkinter.Button(
-            self.root, text="Browse",
-            command=self.click_button_filemanager
+        self.button_browse_files = tkinter.Button(
+            self.root, text="Browse Files",
+            command=self.click_button_browse_files
         )
-        self.button_filemanager.grid(row=2, column=2)
+        self.button_browse_files.grid(row=2, column=2)
+
+        self.button_browse_folder = tkinter.Button(
+            self.root, text="Browse Folder",
+            command=self.click_button_browse_folder
+        )
+        self.button_browse_folder.grid(row=2, column=3)
 
         label2 = tkinter.Label(self.root, text=" ")
         label2.grid(row=3, column=0, columnspan=3)
@@ -58,28 +65,18 @@ class GuiClass:
         )
         self.button_generate.grid(row=4, column=2)
 
-        self.button_read = tkinter.Button(
-            self.root, text="Read QR",
-            command=self.click_button_read_qr
-        )
-        self.button_read.grid(row=4, column=0)
-
         self.button_read_string = tkinter.Button(
-            self.root, text="Read String",
+            self.root, text="Read QR Code(s)",
             command=self.click_button_read_string
         )
-        self.button_read_string.grid(row=4, column=1)
-
-    @staticmethod
-    def entry_password_validate(password):
-        return len(password) <= 20
+        self.button_read_string.grid(row=4, column=0)
 
     def _validate_inputs(self, check_filename=True):
         if not self.password_var.get():
             messagebox.showerror("Error", "Please enter a password.")
             return False
-        if check_filename and not self.entry_filename.get():
-            messagebox.showerror("Error", "Please select a file.")
+        if check_filename and not self.selected_paths:
+            messagebox.showerror("Error", "Please select file(s) or a folder.")
             return False
         return True
 
@@ -87,64 +84,64 @@ class GuiClass:
         if not self._validate_inputs():
             return
 
-        filepath = self.entry_filename.get()
         password = self.password_var.get()
 
         self._disable_ui()
 
+        # generate_qr_async's on_success/on_error run on its background worker
+        # thread -- Tk/Tcl calls (including .after()) are not safe from there,
+        # so only a thread-safe queue.Queue.put() happens in the callbacks, and
+        # the actual UI update happens via polling from the main thread below.
+        result_queue = queue.Queue()
         self.controller.generate_qr_async(
-            filepath,
+            self.selected_paths,
             password,
-            on_success=self._on_generate_success,
-            on_error=self._on_generate_error,
+            on_success=lambda images, texts: result_queue.put(("success", (images, texts))),
+            on_error=lambda error: result_queue.put(("error", error)),
         )
+        self.root.after(100, self._poll_generate_result, result_queue)
 
-    def _on_generate_success(self, qr_image, qr_text):
-        """Called from worker thread - schedule UI update in main thread"""
-        logger.info(f"Generate success callback. Type: {type(qr_image)}, Is list: {isinstance(qr_image, list)}")
+    def _poll_generate_result(self, result_queue):
+        """Runs safely on the main thread."""
+        try:
+            message_type, data = result_queue.get_nowait()
+        except queue.Empty:
+            self.root.after(100, self._poll_generate_result, result_queue)
+            return
 
-        def show_window():
+        self._enable_ui()
+
+        if message_type == "success":
+            qr_images, qr_texts = data
+            logger.info(f"Generate success. {len(qr_images)} QR code(s)")
             try:
-                self._enable_ui()
-                logger.info("Creating QrWindow from main thread")
-                extra_windows.QrWindow(self.root, qr_image, qr_text)
+                extra_windows.QrWindow(self.root, qr_images, qr_texts)
             except Exception as e:
                 logger.error(f"Error creating QrWindow: {e}")
                 logger.exception("Full traceback:")
                 messagebox.showerror("Error", f"Could not display QR window: {e}")
+        else:
+            logger.error(f"Generate error: {data}")
+            messagebox.showerror("Error", str(data))
 
-        # Schedule window creation in main thread
-        self.root.after(0, show_window)
+    def click_button_browse_files(self):
+        filepaths = filedialog.askopenfilenames(filetypes=[("all files", "*.*")])
+        if filepaths:
+            self.selected_paths = list(filepaths)
+            self._update_filename_display()
 
-    def _on_generate_error(self, error: Exception):
-        """Called from worker thread - schedule UI update in main thread"""
-        logger.error(f"Generate error callback: {error}")
+    def click_button_browse_folder(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.selected_paths = [folder]
+            self._update_filename_display()
 
-        def show_error():
-            self._enable_ui()
-            messagebox.showerror("Error", str(error))
-
-        self.root.after(0, show_error)
-
-    def click_button_filemanager(self):
-        filetypes = [("all files", "*.*"), ("PNG files", "*.png")]
-        fp = filedialog.askopenfilename(filetypes=filetypes)
-        if fp:
-            self.entry_filename.delete(0, tkinter.END)
-            self.entry_filename.insert(0, fp)
-
-    def click_button_read_qr(self):
-        if not self._validate_inputs(check_filename=True):
-            return
-
-        filepath = self.entry_filename.get()
-        password = self.password_var.get()
-
-        self.controller.read_qr_from_image_async(
-            filepath,
-            on_success=lambda text: self.root.after(0, lambda: extra_windows.ReadWindow(self.root, password, text)),
-            on_error=lambda err: self.root.after(0, lambda: messagebox.showerror("Error", str(err)))
-        )
+    def _update_filename_display(self):
+        text = self.selected_paths[0] if len(self.selected_paths) == 1 else f"{len(self.selected_paths)} items selected"
+        self.entry_filename.config(state="normal")
+        self.entry_filename.delete(0, tkinter.END)
+        self.entry_filename.insert(0, text)
+        self.entry_filename.config(state="readonly")
 
     def click_button_read_string(self):
         if not self._validate_inputs(check_filename=False):

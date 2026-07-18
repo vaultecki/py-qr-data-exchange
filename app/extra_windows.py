@@ -7,58 +7,36 @@ import queue
 import threading
 import tkinter
 import io
-from tkinter import Toplevel, filedialog, messagebox, ttk
-from typing import List, Union
+from tkinter import Toplevel, filedialog, messagebox
+from typing import List
 from PIL import Image
 
-from app import qr_data_class
+from app import qr_multi_part
+from app import service
+from app.controller import QrExchangeController
 
 logger = logging.getLogger(__name__)
 
 
 class QrWindow(Toplevel):
-    def __init__(self, master, qr_code_generated: Union[Image.Image, List[Image.Image]],
-                 qr_code_text: Union[str, List[str]]):
+    def __init__(self, master, qr_codes: List[Image.Image], qr_texts: List[str]):
         super().__init__(master)
         logger.info("open qr code display window")
 
-        # Check if multi-part
-        self.is_multipart = isinstance(qr_code_generated, list)
-        logger.info(f"QrWindow initialized. Is multipart: {self.is_multipart}, Type: {type(qr_code_generated)}")
+        self.qr_codes = qr_codes
+        self.qr_texts = qr_texts
 
-        if self.is_multipart:
-            self.title(f"Generated QR Codes ({len(qr_code_generated)} parts)")
-            self.qr_codes = qr_code_generated
-            self.qr_texts = qr_code_text
-            logger.info(f"Setting up multipart UI with {len(qr_code_generated)} parts")
-            self._setup_multipart_ui()
-        else:
-            self.title("Generated QR Code")
-            self.qr_codes = [qr_code_generated]
-            self.qr_texts = [qr_code_text]
-            logger.info("Setting up single-part UI")
-            self._setup_single_ui()
+        suffix = "s" if len(qr_codes) > 1 else ""
+        self.title(f"Generated QR Code{suffix} ({len(qr_codes)} part{suffix})")
+        logger.info(f"Setting up QR display UI with {len(qr_codes)} part(s)")
+        self._setup_ui()
 
         self.transient(master)
         self.grab_set()
 
-    def _setup_single_ui(self):
-        """UI for single-part QR code."""
-        tkinter.Label(self, text="QR code has been generated:").grid(row=0, column=0, padx=5, pady=5)
-        var_qr_code_text = tkinter.StringVar(self, self.qr_texts[0])
-        tkinter.Entry(self, width=60, textvariable=var_qr_code_text, state="readonly").grid(
-            row=0, column=1, padx=5, pady=5
-        )
-
-        self._display_qr_image(self.qr_codes[0], row=1)
-
-        self.button = tkinter.Button(master=self, text="Save As", command=self.save_single_file)
-        self.button.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
-
-    def _setup_multipart_ui(self):
-        """UI for multi-part QR codes."""
-        # Info label
-        info_text = f"File was split into {len(self.qr_codes)} QR codes"
+    def _setup_ui(self):
+        """UI for the generated QR code(s), with navigation (works for 1 part too)."""
+        info_text = f"{len(self.qr_codes)} QR code(s) generated"
         tkinter.Label(self, text=info_text, font=('Arial', 10, 'bold')).grid(
             row=0, column=0, columnspan=2, padx=5, pady=5
         )
@@ -153,14 +131,6 @@ class QrWindow(Toplevel):
         label.image = photo  # Keep reference
         label.grid(row=row, column=0, columnspan=2, padx=5, pady=5)
 
-    def save_single_file(self):
-        """Saves a single QR code."""
-        files = [("PNG files", "*.png"), ("SVG files", "*.svg")]
-        file_out = filedialog.asksaveasfilename(filetypes=files, defaultextension=".png")
-        if file_out:
-            self.qr_codes[0].save(file_out)
-            messagebox.showinfo("Success", f"QR code saved: {file_out}")
-
     def save_current_file(self):
         """Saves the currently displayed QR code."""
         files = [("PNG files", "*.png"), ("SVG files", "*.svg")]
@@ -195,108 +165,228 @@ class QrWindow(Toplevel):
 
 
 class ReadWindow(Toplevel):
-    def __init__(self, master, password, qr_text=""):
+    def __init__(self, master, password):
         super().__init__(master)
         logger.info("open qr read window")
         self.password = password
-        self.qr_texts = []  # List for multi-part QR codes
-        self.suggested_filename = None  # Store suggested filename
+        self.parts_by_number = {}  # part_number -> qr_text, for parts confirmed to belong to this transfer
+        self.total_parts = None  # only known once at least one part decrypts successfully
 
         self.title("QR Data Read")
 
         # Text input
-        tkinter.Label(self, text="Text to convert:").grid(row=0, column=0, padx=5, pady=5)
-        if qr_text:
-            text = tkinter.StringVar(self, qr_text)
-            self.text_field = tkinter.Entry(self, textvariable=text, width=60, state="readonly")
-            self.qr_texts = [qr_text]
-        else:
-            self.text_field = tkinter.Entry(self, width=60)
+        tkinter.Label(self, text="Text to add:").grid(row=0, column=0, padx=5, pady=5)
+        self.text_field = tkinter.Entry(self, width=60)
         self.text_field.grid(row=0, column=1, padx=5, pady=5)
+        self.add_text_button = tkinter.Button(self, text="Add", command=self.click_add_text)
+        self.add_text_button.grid(row=0, column=2, padx=5, pady=5)
 
         # Multi-part section
-        multipart_frame = tkinter.LabelFrame(self, text="Multi-Part QR Codes", padx=5, pady=5)
-        multipart_frame.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
+        multipart_frame = tkinter.LabelFrame(self, text="Loaded Parts", padx=5, pady=5)
+        multipart_frame.grid(row=1, column=0, columnspan=3, padx=5, pady=5, sticky="ew")
 
-        tkinter.Button(multipart_frame, text="Add QR Code Image(s)",
-                       command=self.add_qr_image).pack(side=tkinter.LEFT, padx=5)
+        self.add_files_button = tkinter.Button(multipart_frame, text="Add QR Code File(s)",
+                                               command=self.add_qr_image)
+        self.add_files_button.pack(side=tkinter.LEFT, padx=5)
 
-        self.multipart_label = tkinter.Label(multipart_frame, text="0 QR codes loaded")
-        self.multipart_label.pack(side=tkinter.LEFT, padx=10)
+        self.status_label = tkinter.Label(multipart_frame, text="0 parts loaded")
+        self.status_label.pack(side=tkinter.LEFT, padx=10)
 
-        tkinter.Button(multipart_frame, text="Clear List",
-                       command=self.clear_qr_list).pack(side=tkinter.LEFT, padx=5)
+        self.clear_button = tkinter.Button(multipart_frame, text="Clear List",
+                                           command=self.clear_qr_list)
+        self.clear_button.pack(side=tkinter.LEFT, padx=5)
 
-        # Decrypt button
-        self.button = tkinter.Button(self, text="Decrypt and Save as", command=self.on_click_decrypt)
-        self.button.grid(row=2, column=1, padx=5, pady=5)
+        # Decrypt button -- stays disabled until every part of the transfer is loaded
+        self.decrypt_button = tkinter.Button(
+            self, text="Decrypt and Extract to Folder", command=self.on_click_decrypt, state="disabled"
+        )
+        self.decrypt_button.grid(row=2, column=2, padx=5, pady=5)
 
-        self.result_queue = queue.Queue()
+        self.decrypt_result_queue = queue.Queue()
+        self.text_add_queue = queue.Queue()
+        self.file_add_queue = queue.Queue()
+        self._destroyed = False
 
         self.transient(master)
         self.grab_set()
 
+    def destroy(self):
+        # Background add/decrypt workers keep running after the window closes and
+        # schedule self.after(...) poll callbacks; this flag lets those callbacks
+        # bail out instead of touching widgets that no longer exist.
+        self._destroyed = True
+        super().destroy()
+
+    def _try_add_part(self, qr_text: str) -> str:
+        """
+        Attempts to decrypt and record a single QR part. Runs the (comparatively
+        expensive, full-Argon2i) decryption, so call this off the main thread.
+
+        Returns an empty string on success (including a harmless re-add of an
+        already-loaded part), or an error message describing why the part was
+        rejected.
+        """
+        qr_text = qr_text.strip()
+        if not qr_text:
+            return "Empty text"
+
+        try:
+            part_number, total_parts = QrExchangeController.get_part_info(qr_text, self.password)
+        except qr_multi_part.DecryptionError as e:
+            return f"Cannot decrypt: {e}"
+        except Exception as e:
+            return f"Not a valid QR code for this application: {e}"
+
+        existing_text = self.parts_by_number.get(part_number)
+        if existing_text is not None:
+            if existing_text == qr_text:
+                logger.info(f"Part {part_number} already loaded, ignoring duplicate")
+                return ""
+            return (
+                f"Part {part_number} was already loaded with different content -- this looks "
+                f"like a different transfer. Click 'Clear List' first if you want to start over."
+            )
+
+        if self.total_parts is not None and total_parts != self.total_parts:
+            return (
+                f"This part claims {total_parts} total part(s), but previously loaded parts "
+                f"claim {self.total_parts} -- it's likely from a different transfer"
+            )
+
+        self.total_parts = total_parts
+        self.parts_by_number[part_number] = qr_text
+        return ""
+
+    def _update_status(self):
+        """Refreshes the status label and the decrypt button's enabled state."""
+        if self.total_parts is None:
+            self.status_label.config(text="0 parts loaded")
+            complete = False
+        else:
+            loaded = len(self.parts_by_number)
+            self.status_label.config(text=f"{loaded}/{self.total_parts} parts loaded")
+            complete = set(self.parts_by_number.keys()) == set(range(1, self.total_parts + 1))
+
+        self.decrypt_button.config(state="normal" if complete else "disabled")
+
+    def _set_busy(self, busy: bool):
+        """Disables/enables the add/clear controls while a background add or decrypt is running."""
+        state = "disabled" if busy else "normal"
+        self.add_text_button.config(state=state)
+        self.add_files_button.config(state=state)
+        self.clear_button.config(state=state)
+        self.config(cursor="watch" if busy else "")
+        if busy:
+            self.decrypt_button.config(state="disabled")
+
+    def click_add_text(self):
+        """Adds the QR text currently typed/pasted into the text field (decrypted in the background)."""
+        text = self.text_field.get().strip()
+        if not text:
+            return
+
+        # Support pasting multiple concatenated QR texts at once (base64 blobs end with '==').
+        if len(text) > 2953 and "==" in text:
+            candidates = [part.strip() + "==" for part in text.split("==") if part.strip()]
+        else:
+            candidates = [text]
+
+        self.text_field.delete(0, tkinter.END)
+        self._set_busy(True)
+
+        threading.Thread(
+            target=self._add_text_worker,
+            args=(candidates, self.text_add_queue),
+            daemon=True
+        ).start()
+        self.after(100, self._poll_text_add_result)
+
+    def _add_text_worker(self, candidates, q):
+        errors = [error for error in (self._try_add_part(c) for c in candidates) if error]
+        q.put(errors)
+
+    def _poll_text_add_result(self):
+        if self._destroyed:
+            return
+        try:
+            errors = self.text_add_queue.get_nowait()
+        except queue.Empty:
+            self.after(100, self._poll_text_add_result)
+            return
+
+        self._set_busy(False)
+        self._update_status()
+        if errors:
+            messagebox.showerror("Error", "\n".join(errors))
+
+    @staticmethod
+    def _read_qr_text_from_file(filepath: str) -> str:
+        """
+        Reads a QR code's text either from a QR text file (as saved by "Save All",
+        one raw base64 string per file) or by decoding an image.
+        """
+        if filepath.lower().endswith(".txt"):
+            with open(filepath, "r") as f:
+                return f.read().strip()
+        return service.read_qr_from_image(filepath)
+
     def add_qr_image(self):
-        """Adds one or multiple QR code images to the list."""
-        filetypes = [("Image files", "*.png *.jpg *.jpeg"), ("All files", "*.*")]
+        """Adds one or multiple QR code images or QR text files to the list (in the background)."""
+        filetypes = [
+            ("QR code files", "*.png *.jpg *.jpeg *.txt"),
+            ("Image files", "*.png *.jpg *.jpeg"),
+            ("Text files", "*.txt"),
+            ("All files", "*.*"),
+        ]
         filepaths = filedialog.askopenfilenames(filetypes=filetypes)
 
         if not filepaths:
             return
 
-        # Show progress for multiple files
-        total_files = len(filepaths)
-        if total_files > 1:
-            self.config(cursor="watch")
-            self.multipart_label.config(text=f"Loading {total_files} files...")
-            self.update()
+        self._set_busy(True)
+        self.status_label.config(text=f"Loading {len(filepaths)} file(s)...")
 
+        threading.Thread(
+            target=self._add_files_worker,
+            args=(list(filepaths), self.file_add_queue),
+            daemon=True
+        ).start()
+        self.after(100, self._poll_file_add_result)
+
+    def _add_files_worker(self, filepaths, q):
         loaded_count = 0
         errors = []
-        last_info = ""
 
-        for idx, filepath in enumerate(filepaths, 1):
+        for filepath in filepaths:
             try:
-                from app import service
-                logger.info(f"Reading QR code {idx}/{total_files}: {filepath}")
-                qr_text = service.read_qr_from_image(filepath)
-                self.qr_texts.append(qr_text)
+                logger.info(f"Reading QR code: {filepath}")
+                qr_text = self._read_qr_text_from_file(filepath)
 
-                # Check if multi-part
-                from app.controller import QrExchangeController
-                if QrExchangeController.is_multipart_qr(qr_text):
-                    part_num, total = QrExchangeController.get_multipart_info(qr_text)
-                    last_info = f"Part {part_num}/{total}"
-                else:
-                    last_info = "Single-part"
+                error = self._try_add_part(qr_text)
+                if error:
+                    raise ValueError(error)
 
                 loaded_count += 1
-                logger.info(f"QR code added: {last_info}")
-
-                # Update progress for multiple files
-                if total_files > 1:
-                    self.multipart_label.config(
-                        text=f"Loading {idx}/{total_files}... ({loaded_count} successful)"
-                    )
-                    self.update()
+                logger.info(f"QR code added: {filepath}")
 
             except Exception as e:
-                error_msg = f"{filepath}: {str(e)}"
-                errors.append(error_msg)
+                errors.append(f"{filepath}: {e}")
                 logger.error(f"Could not read QR code from {filepath}: {e}")
 
-        # Reset cursor
-        if total_files > 1:
-            self.config(cursor="")
+        q.put((loaded_count, len(filepaths), errors))
 
-        # Update final status
-        if loaded_count > 0:
-            status_text = f"{len(self.qr_texts)} QR codes loaded"
-            if last_info:
-                status_text += f" (last: {last_info})"
-            self.multipart_label.config(text=status_text)
+    def _poll_file_add_result(self):
+        if self._destroyed:
+            return
+        try:
+            loaded_count, total_files, errors = self.file_add_queue.get_nowait()
+        except queue.Empty:
+            self.after(100, self._poll_file_add_result)
+            return
 
-        # Show errors if any
+        self._set_busy(False)
+        self._update_status()
+
         if errors:
             error_summary = f"Successfully loaded {loaded_count}/{total_files} files.\n\nErrors:\n"
             error_summary += "\n".join(errors[:5])  # Show max 5 errors
@@ -309,62 +399,42 @@ class ReadWindow(Toplevel):
             messagebox.showerror("Error", "Could not read any QR codes from the selected files.")
 
     def clear_qr_list(self):
-        """Clears the list of QR codes."""
-        self.qr_texts = []
-        self.suggested_filename = None
-        self.multipart_label.config(text="0 QR codes loaded")
+        """Clears the list of loaded parts."""
+        self.parts_by_number = {}
+        self.total_parts = None
+        self._update_status()
         logger.info("QR code list cleared")
 
     def on_click_decrypt(self):
         logger.debug("button pressed")
-        self.button.config(state="disabled")
-        self.config(cursor="watch")
+        if not self.parts_by_number:
+            return
 
-        # Use either text input or loaded QR codes
-        if self.qr_texts:
-            input_data = self.qr_texts
-        else:
-            input_str = self.text_field.get()
-            if not input_str:
-                messagebox.showerror("Error", "Please enter text or load QR codes")
-                self.button.config(state="normal")
-                self.config(cursor="")
-                return
-            input_data = input_str
+        output_dir = filedialog.askdirectory(title="Select output folder")
+        if not output_dir:
+            return
 
-            if len(input_str) > 2953 and "==" in input_str:
-                logger.debug("probably multipart string")
-                input_array = input_str.lstrip().rstrip().split("==")
-                self.qr_texts = []
-                for part in input_array:
-                    part = part.lstrip().rstrip() + "=="
-                    self.qr_texts.append(part)
-                    from app.controller import QrExchangeController
-                    if QrExchangeController.is_multipart_qr(part):
-                        part_num, total = QrExchangeController.get_multipart_info(part)
-                        info = f"Part {part_num}/{total}"
-                        logger.debug(info)
-                input_data = self.qr_texts
+        self._set_busy(True)
 
         threading.Thread(
             target=self.on_click_decrypt_thread_worker,
-            args=(input_data, self.password, self.result_queue),
+            args=(list(self.parts_by_number.values()), self.password, output_dir, self.decrypt_result_queue),
             daemon=True
         ).start()
         self.after(250, self.process_queue)
 
-    def on_click_decrypt_thread_worker(self, input_data, password, q):
+    def on_click_decrypt_thread_worker(self, input_data, password, output_dir, q):
         try:
-            logger.debug("start decryption, decompressing")
-            from app.controller import QrExchangeController
-            raw_data, filename, timestamp = QrExchangeController.decrypt_qr_data(
+            logger.debug("start decryption, decompressing, extracting")
+            extracted = QrExchangeController.decrypt_qr_data(
                 qr_texts=input_data,
-                password=password
+                password=password,
+                output_dir=output_dir
             )
-            logger.debug(f"ended decryption, decompressing. Filename: {filename}")
-            q.put(("success", (raw_data, filename, timestamp)))
-        except qr_data_class.DecryptionError as e:
-            logger.error(f"cannot decrypt string: {e}")
+            logger.debug(f"decryption/extraction done. {len(extracted)} file(s)")
+            q.put(("success", (extracted, output_dir)))
+        except qr_multi_part.DecryptionError as e:
+            logger.error(f"cannot decrypt: {e}")
             q.put(("error", e))
         except Exception as e:
             logger.error(f"unexpected error: {e}")
@@ -372,46 +442,31 @@ class ReadWindow(Toplevel):
 
     def process_queue(self):
         """This function runs safely in the main thread."""
+        if self._destroyed:
+            return
         try:
             logger.debug("Checking if something is in the queue (non-blocking)")
-            message_type, data = self.result_queue.get_nowait()
+            message_type, data = self.decrypt_result_queue.get_nowait()
             if message_type == "success":
-                raw_data, filename, timestamp = data
+                extracted, output_dir = data
 
-                files = [("all files", "*.*")]
-                logger.debug("open file dialog")
+                preview = "\n".join(str(p) for p in extracted[:10])
+                if len(extracted) > 10:
+                    preview += f"\n... and {len(extracted) - 10} more"
 
-                # Use suggested filename if available
-                if filename:
-                    logger.info(f"Using suggested filename: {filename}")
-                    file_out = filedialog.asksaveasfilename(
-                        filetypes=files,
-                        initialfile=filename
-                    )
-                else:
-                    file_out = filedialog.asksaveasfilename(filetypes=files)
-
-                if file_out:
-                    with open(file_out, "wb+") as f_out:
-                        f_out.write(raw_data)
-
-                    # Create success message with timestamp if available
-                    success_msg = f"File saved: {file_out}"
-                    if timestamp:
-                        import time
-                        timestamp_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
-                        success_msg += f"\n\nOriginal file created: {timestamp_str}"
-
-                    messagebox.showinfo("Success", success_msg)
+                messagebox.showinfo(
+                    "Success",
+                    f"{len(extracted)} file(s) extracted to:\n{output_dir}\n\n{preview}"
+                )
             elif message_type == "error":
                 logger.debug("Now the error message can be displayed safely")
-                if isinstance(data, qr_data_class.DecryptionError):
+                if isinstance(data, qr_multi_part.DecryptionError):
                     messagebox.showerror("Error", f"Cannot decrypt: {str(data)}")
                 else:
                     messagebox.showerror("Unexpected Error", f"An error occurred: {data}")
 
-            self.button.config(state="normal")
-            self.config(cursor="")
+            self._set_busy(False)
+            self._update_status()
         except queue.Empty:
             # If queue is empty, check again in 250ms
             self.after(250, self.process_queue)

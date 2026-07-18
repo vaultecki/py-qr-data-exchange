@@ -3,67 +3,41 @@
 
 import logging
 import qrcode
-import os
-from typing import List, Tuple, Union, Optional
+from pathlib import Path
+from typing import List, Sequence, Tuple
 from PIL import Image
 
-from app import qr_data_class
 from app import qr_multi_part
 
 logger = logging.getLogger(__name__)
 
 
 # Custom error classes for better feedback
-class FileTooLargeError(Exception):
-    pass
-
-
 class QRCodeNotFoundError(Exception):
     pass
 
 
-def generate_qr_from_file(filepath: str, password: str, max_bytes: int) -> Union[
-    Tuple[Image.Image, str],
-    Tuple[List[Image.Image], List[str]]
-]:
+def generate_qr_from_paths(paths: Sequence[str], password: str, max_bytes: int) -> Tuple[List[Image.Image], List[str]]:
     """
-    Reads a file, encrypts it and returns QR code image(s).
+    Packs one or more files/directories, encrypts them and returns QR code image(s).
+
+    Args:
+        paths: Files and/or directories to bundle and encrypt.
+        password: Password for encryption.
+        max_bytes: Maximum size (base64 chars) per QR code.
 
     Returns:
-        Either (single_image, single_text) or ([images], [texts]) for multi-part
+        (images, texts) -- always lists, length 1 if everything fits in one QR code.
     """
-    with open(filepath, "rb") as f_in:
-        raw_data = f_in.read()
-
-    # Try single-part first
-    try:
-        encoded_string = qr_data_class.QrDataProcessor.serialize(raw_data=raw_data, password=password)
-
-        if len(encoded_string) < max_bytes:
-            # Single QR code is sufficient
-            image = qrcode.make(encoded_string, error_correction=1)
-            logger.info(f"Single QR code created ({len(encoded_string)} bytes)")
-            return image, encoded_string
-    except Exception as e:
-        logger.debug(f"Single-part failed: {e}")
-
-    # File is too large -> multi-part
-    logger.info("File too large for single QR code, using multi-part")
-
-    # Extract filename from filepath
-    file_name = os.path.basename(filepath)
-
-    qr_strings = qr_multi_part.MultiPartQrProcessor.serialize_multipart(
-        raw_data, password, max_bytes, file_name=file_name
-    )
+    qr_strings = qr_multi_part.MultiPartQrProcessor.serialize_paths(list(paths), password, max_bytes)
 
     images = []
     for i, qr_string in enumerate(qr_strings, 1):
         image = qrcode.make(qr_string, error_correction=1)
         images.append(image)
-        logger.debug(f"Multi-part QR {i}/{len(qr_strings)} created")
+        logger.debug(f"QR code {i}/{len(qr_strings)} created")
 
-    logger.info(f"Multi-part: {len(images)} QR codes created")
+    logger.info(f"{len(images)} QR code(s) created")
     return images, qr_strings
 
 
@@ -93,7 +67,7 @@ def read_qr_from_image(filepath: str) -> str:
             result = decoded_text[0] if isinstance(decoded_text, tuple) else decoded_text
 
             if result:
-                logger.info(f"QR code successfully read with qreader")
+                logger.info("QR code successfully read with qreader")
                 return result
 
         logger.warning("qreader: No QR code detected, trying OpenCV fallback")
@@ -150,98 +124,70 @@ def read_multiple_qr_from_images(filepaths: List[str]) -> List[str]:
     return qr_texts
 
 
-def is_multipart_qr(qr_text: str) -> bool:
-    """Checks if a QR text is a multi-part QR."""
-    return qr_multi_part.MultiPartQrProcessor.is_multipart_qr(qr_text)
+def is_valid_qr_part(qr_text: str) -> bool:
+    """Structural check only (no password needed): does this look like one of our QR codes?"""
+    return qr_multi_part.MultiPartQrProcessor.is_valid_qr_part(qr_text)
 
 
-def get_multipart_info(qr_text: str) -> Tuple[int, int]:
+def get_part_info(qr_text: str, password: str) -> Tuple[int, int]:
     """
-    Returns information about a multi-part QR.
+    Decrypts a single QR part and returns (part_number, total_parts).
 
-    Returns:
-        (part_number, total_parts)
+    Requires the correct password, since this info lives inside the ciphertext.
+    Raises qr_multi_part.DecryptionError on a wrong password or corrupted part.
     """
-    return qr_multi_part.MultiPartQrProcessor.get_part_info(qr_text)
+    inner = qr_multi_part.MultiPartQrProcessor.decrypt_part(qr_text, password)
+    return inner["p"], inner["t"]
 
 
-def decrypt_qr_data(qr_texts: Union[str, List[str]], password: str) -> Tuple[bytes, Optional[str], Optional[float]]:
+def decrypt_qr_data(qr_texts: Sequence[str], password: str, output_dir: str) -> List[Path]:
     """
-    Decrypts QR data (single-part or multi-part).
+    Decrypts QR data and extracts the resulting archive into output_dir.
 
     Args:
-        qr_texts: Either a single QR string or a list of QR strings
-        password: Password for decryption
+        qr_texts: QR code strings (one or more, any order).
+        password: Password for decryption.
+        output_dir: Directory to extract the recovered files/folders into.
 
     Returns:
-        Tuple of (raw_data, filename, timestamp)
-        For single-part QR codes, filename and timestamp will be None
+        List of extracted file paths.
     """
-    # Normalize input to list
-    if isinstance(qr_texts, str):
-        qr_texts = [qr_texts]
-
     if not qr_texts:
         raise ValueError("No QR texts provided")
 
-    # Check if multi-part
-    if is_multipart_qr(qr_texts[0]):
-        logger.info("Multi-part QR code detected")
-        return qr_multi_part.MultiPartQrProcessor.deserialize_multipart(qr_texts, password)
-    else:
-        # Single-part
-        if len(qr_texts) > 1:
-            logger.warning(f"Multiple QR codes provided, but first is not multi-part. Using only the first.")
-
-        logger.info("Single-part QR code detected")
-        raw_data = qr_data_class.QrDataProcessor.deserialize(qr_texts[0], password)
-        return raw_data, None, None
+    tar_bytes = qr_multi_part.MultiPartQrProcessor.deserialize_to_bytes(list(qr_texts), password)
+    return qr_multi_part.MultiPartQrProcessor.extract_tar(tar_bytes, output_dir)
 
 
 if __name__ == "__main__":
+    import shutil
+    import tempfile
+
     logging.basicConfig(level=logging.DEBUG)
     logger.info("main of service.py")
 
-    # Test multi-part
     test_password = "test123"
-    test_data = b"Test " * 2000  # ~10KB
-
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.txt') as f:
-        f.write(test_data)
-        temp_path = f.name
-
+    workdir = tempfile.mkdtemp()
     try:
+        test_file = Path(workdir) / "test.txt"
+        test_file.write_bytes(b"Test " * 2000)  # ~10KB
+
         # Generate
-        result = generate_qr_from_file(temp_path, test_password, max_bytes=500)
+        images, texts = generate_qr_from_paths([str(test_file)], test_password, max_bytes=500)
+        logger.info(f"{len(images)} QR code(s) created")
 
-        if isinstance(result[0], list):
-            images, texts = result
-            logger.info(f"Multi-part: {len(images)} QR codes created")
+        # Save first QR code and test reading it back
+        test_qr_path = Path(workdir) / "test_qr.png"
+        images[0].save(test_qr_path)
 
-            # Save first QR code for testing
-            test_qr_path = tempfile.mktemp(suffix='.png')
-            images[0].save(test_qr_path)
-            logger.info(f"Test QR saved to: {test_qr_path}")
+        read_text = read_qr_from_image(str(test_qr_path))
+        logger.info(f"QR read test: {'OK' if read_text == texts[0] else 'FAILED'}")
 
-            # Test reading
-            try:
-                read_text = read_qr_from_image(test_qr_path)
-                logger.info(f"QR read test: {'✓ SUCCESS' if read_text == texts[0] else '✗ FAILED'}")
-            except Exception as e:
-                logger.error(f"QR read test failed: {e}")
-            finally:
-                import os
-
-                os.unlink(test_qr_path)
-
-            # Decrypt
-            restored, filename, timestamp = decrypt_qr_data(texts, test_password)
-            assert restored == test_data
-            logger.info(f"✓ Multi-part test successful! Filename: {filename}")
-        else:
-            logger.info("Single-part QR code created")
+        # Decrypt
+        out_dir = Path(workdir) / "out"
+        extracted = decrypt_qr_data(texts, test_password, str(out_dir))
+        assert len(extracted) == 1
+        assert extracted[0].read_bytes() == test_file.read_bytes()
+        logger.info("Round-trip test successful!")
     finally:
-        import os
-        os.unlink(temp_path)
+        shutil.rmtree(workdir, ignore_errors=True)
