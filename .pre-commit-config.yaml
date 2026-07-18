@@ -1,0 +1,25 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.22
+    hooks:
+      - id: ruff-check
+        stages: [pre-commit]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.0
+    hooks:
+      - id: mypy
+        args: [app]
+        pass_filenames: false
+        additional_dependencies: [types-Pillow, types-setuptools]
+        stages: [pre-commit]
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: venv/bin/python -m pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

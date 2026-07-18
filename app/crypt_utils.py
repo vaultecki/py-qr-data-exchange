@@ -1,14 +1,15 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+import contextlib
 import logging
 from typing import Optional
 
+import nacl.exceptions
+import nacl.pwhash
 import nacl.secret
 import nacl.utils
-import nacl.pwhash
-import nacl.exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -94,10 +95,8 @@ class CryptoUtils:
                         password_bytes[i] = 0
             except Exception:
                 pass
-            try:
+            with contextlib.suppress(Exception):
                 del password_bytes
-            except Exception:
-                pass
 
     @staticmethod
     def encrypt(data: bytes, key: bytes) -> bytes:
@@ -217,4 +216,4 @@ if __name__ == "__main__":
 
     dec = CryptoUtils.decode_base64(b64)
     plaintext = CryptoUtils.decrypt(dec, key)
-    logger.info(f"plaintext: {plaintext}")
+    logger.info(f"plaintext: {plaintext.decode()}")

@@ -1,14 +1,13 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import getpass
 import logging
 import sys
-import getpass
 from pathlib import Path
 
-from app import service
-from app import qr_multi_part
+from app import qr_multi_part, service
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ def generate_qr(args):
         # Optional: Save QR texts to file
         if args.save_texts:
             text_file = output_dir / f"{output_name}_qr_texts.txt"
-            with open(text_file, 'w') as f:
+            with text_file.open('w') as f:
                 for i, text in enumerate(texts, 1):
                     f.write(f"# Part {i}/{len(texts)}\n")
                     f.write(text + "\n\n")
@@ -155,7 +154,7 @@ def decrypt_text(args):
             logger.error(f"Text file not found: {text_file}")
             return 1
 
-        with open(text_file, 'r') as f:
+        with text_file.open() as f:
             content = f.read()
 
         # Parse multi-part text file (with # Part markers)
@@ -334,9 +333,9 @@ Examples:
     # Execute the corresponding command
     if args.command == 'generate':
         return generate_qr(args)
-    elif args.command == 'read':
+    if args.command == 'read':
         return read_qr(args)
-    elif args.command == 'decrypt':
+    if args.command == 'decrypt':
         return decrypt_text(args)
 
     return 0

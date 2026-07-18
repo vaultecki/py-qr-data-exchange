@@ -1,13 +1,13 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import os
 import tkinter
 
 import pytest
+from helpers import pump_until
 
 from app import extra_windows, service
-from helpers import pump_until
 
 
 @pytest.fixture
@@ -170,7 +170,9 @@ def test_add_qr_image_reads_txt_files_via_file_dialog(tk_root, tmp_path, monkeyp
         p.write_text(text)
         txt_paths.append(str(p))
 
-    monkeypatch.setattr(extra_windows.filedialog, "askopenfilenames", lambda **kwargs: tuple(txt_paths))
+    monkeypatch.setattr(
+        extra_windows.filedialog, "askopenfilenames", lambda **kwargs: tuple(txt_paths)
+    )
 
     rw = extra_windows.ReadWindow(tk_root, password)
     rw.add_qr_image()

@@ -1,11 +1,11 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from helpers import qr_reader_available
 from PIL import Image
 
 from app import service
-from helpers import qr_reader_available
 
 
 def test_generate_qr_from_paths_returns_matching_lists(tmp_path, password):
@@ -41,7 +41,9 @@ def test_is_valid_qr_part(tmp_path, password):
     assert service.is_valid_qr_part("garbage") is False
 
 
-@pytest.mark.skipif(not qr_reader_available(), reason="no QR reader backend (qreader/opencv) installed")
+@pytest.mark.skipif(
+    not qr_reader_available(), reason="no QR reader backend (qreader/opencv) installed"
+)
 def test_read_qr_from_image_roundtrip(tmp_path, password):
     f = tmp_path / "file.txt"
     f.write_text("image round trip")
@@ -53,7 +55,9 @@ def test_read_qr_from_image_roundtrip(tmp_path, password):
     assert service.read_qr_from_image(str(qr_path)) == texts[0]
 
 
-@pytest.mark.skipif(not qr_reader_available(), reason="no QR reader backend (qreader/opencv) installed")
+@pytest.mark.skipif(
+    not qr_reader_available(), reason="no QR reader backend (qreader/opencv) installed"
+)
 def test_read_qr_from_image_without_qr_raises(tmp_path):
     blank = Image.new("RGB", (200, 200), color="white")
     path = tmp_path / "blank.png"

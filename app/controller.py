@@ -1,10 +1,11 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
-import threading
 import logging
+import threading
 from pathlib import Path
 from typing import Callable, List, Tuple
+
 from PIL import Image
 
 from app import service
@@ -59,7 +60,7 @@ class QrExchangeController:
         except DecryptionError as e:
             raise e
         except Exception as e:
-            raise Exception(f"Unexpected error during decryption: {e}")
+            raise Exception(f"Unexpected error during decryption: {e}") from e
 
     @staticmethod
     def is_valid_qr_part(qr_text: str) -> bool:
@@ -77,4 +78,4 @@ class QrExchangeController:
         except DecryptionError as e:
             raise e
         except Exception as e:
-            raise Exception(f"Unexpected error while reading part info: {e}")
+            raise Exception(f"Unexpected error while reading part info: {e}") from e

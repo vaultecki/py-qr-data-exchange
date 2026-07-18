@@ -1,18 +1,19 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
+import io
 import logging
 import math
 import queue
 import threading
 import tkinter
-import io
+from pathlib import Path
 from tkinter import Toplevel, filedialog, messagebox
 from typing import List
+
 from PIL import Image
 
-from app import qr_multi_part
-from app import service
+from app import qr_multi_part, service
 from app.controller import QrExchangeController
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,9 @@ class QrWindow(Toplevel):
                                           command=self.show_previous)
         self.prev_button.pack(side=tkinter.LEFT, padx=5)
 
-        self.part_label = tkinter.Label(nav_frame, text=f"Part {self.current_index + 1}/{len(self.qr_codes)}")
+        self.part_label = tkinter.Label(
+            nav_frame, text=f"Part {self.current_index + 1}/{len(self.qr_codes)}"
+        )
         self.part_label.pack(side=tkinter.LEFT, padx=10)
 
         self.next_button = tkinter.Button(nav_frame, text="Next ►",
@@ -95,7 +98,8 @@ class QrWindow(Toplevel):
         self._display_qr_image(self.qr_codes[index], parent=self.qr_container, row=0)
 
         # Update text
-        self.text_var.set(self.qr_texts[index][:50] + "..." if len(self.qr_texts[index]) > 50 else self.qr_texts[index])
+        text = self.qr_texts[index]
+        self.text_var.set(text[:50] + "..." if len(text) > 50 else text)
 
     def show_previous(self):
         if self.current_index > 0:
@@ -112,7 +116,8 @@ class QrWindow(Toplevel):
     def update_navigation(self):
         """Updates navigation buttons."""
         self.prev_button.config(state="normal" if self.current_index > 0 else "disabled")
-        self.next_button.config(state="normal" if self.current_index < len(self.qr_codes) - 1 else "disabled")
+        is_last = self.current_index >= len(self.qr_codes) - 1
+        self.next_button.config(state="disabled" if is_last else "normal")
         self.part_label.config(text=f"Part {self.current_index + 1}/{len(self.qr_codes)}")
 
     def _display_qr_image(self, qr_image: Image.Image, row: int = 0, parent=None):
@@ -128,7 +133,7 @@ class QrWindow(Toplevel):
 
         photo = tkinter.PhotoImage(data=output.getvalue(), master=parent)
         label = tkinter.Label(master=parent, image=photo)
-        label.image = photo  # Keep reference
+        label.image = photo  # type: ignore[attr-defined]  # keep reference, prevents GC
         label.grid(row=row, column=0, columnspan=2, padx=5, pady=5)
 
     def save_current_file(self):
@@ -148,17 +153,16 @@ class QrWindow(Toplevel):
         """Saves all QR codes to a directory."""
         directory = filedialog.askdirectory(title="Select folder for QR codes")
         if directory:
-            import os
+            directory = Path(directory)
             for i, qr_image in enumerate(self.qr_codes, 1):
                 filename = f"qr_part_{i}_of_{len(self.qr_codes)}.png"
-                filepath = os.path.join(directory, filename)
-                qr_image.save(filepath)
+                filepath = directory / filename
+                qr_image.save(str(filepath))
             for i, qr_string in enumerate(self.qr_texts, 1):
                 filename = f"qr_part_{i}_of_{len(self.qr_codes)}.txt"
-                filepath = os.path.join(directory, filename)
-                with open(filepath, "w") as text_file:
+                filepath = directory / filename
+                with filepath.open("w") as text_file:
                     text_file.write(qr_string)
-                    text_file.close()
 
             messagebox.showinfo("Success",
                                 f"{len(self.qr_codes)} QR codes saved to:\n{directory}")
@@ -169,7 +173,8 @@ class ReadWindow(Toplevel):
         super().__init__(master)
         logger.info("open qr read window")
         self.password = password
-        self.parts_by_number = {}  # part_number -> qr_text, for parts confirmed to belong to this transfer
+        # part_number -> qr_text, for parts confirmed to belong to this transfer
+        self.parts_by_number = {}
         self.total_parts = None  # only known once at least one part decrypts successfully
 
         self.title("QR Data Read")
@@ -198,7 +203,8 @@ class ReadWindow(Toplevel):
 
         # Decrypt button -- stays disabled until every part of the transfer is loaded
         self.decrypt_button = tkinter.Button(
-            self, text="Decrypt and Extract to Folder", command=self.on_click_decrypt, state="disabled"
+            self, text="Decrypt and Extract to Folder",
+            command=self.on_click_decrypt, state="disabled"
         )
         self.decrypt_button.grid(row=2, column=2, padx=5, pady=5)
 
@@ -280,7 +286,7 @@ class ReadWindow(Toplevel):
             self.decrypt_button.config(state="disabled")
 
     def click_add_text(self):
-        """Adds the QR text currently typed/pasted into the text field (decrypted in the background)."""
+        """Adds the QR text typed/pasted into the text field (decrypted in the background)."""
         text = self.text_field.get().strip()
         if not text:
             return
@@ -326,7 +332,7 @@ class ReadWindow(Toplevel):
         one raw base64 string per file) or by decoding an image.
         """
         if filepath.lower().endswith(".txt"):
-            with open(filepath, "r") as f:
+            with Path(filepath).open() as f:
                 return f.read().strip()
         return service.read_qr_from_image(filepath)
 
@@ -418,7 +424,10 @@ class ReadWindow(Toplevel):
 
         threading.Thread(
             target=self.on_click_decrypt_thread_worker,
-            args=(list(self.parts_by_number.values()), self.password, output_dir, self.decrypt_result_queue),
+            args=(
+                list(self.parts_by_number.values()),
+                self.password, output_dir, self.decrypt_result_queue,
+            ),
             daemon=True
         ).start()
         self.after(250, self.process_queue)

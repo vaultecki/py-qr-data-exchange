@@ -1,4 +1,4 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
@@ -6,10 +6,9 @@ import io
 import logging
 import lzma
 import math
-import os
 import tarfile
 from pathlib import Path
-from typing import List, Sequence
+from typing import List, Sequence, Union
 
 import msgpack
 import nacl.exceptions
@@ -98,7 +97,10 @@ class MultiPartQrProcessor:
 
         tar_bytes = cls._build_tar(paths)
         compressed = lzma.compress(tar_bytes, preset=LZMA_PRESET)
-        logger.info(f"Packed {len(paths)} path(s): {len(tar_bytes)} bytes tar -> {len(compressed)} bytes (lzma)")
+        logger.info(
+            f"Packed {len(paths)} path(s): "
+            f"{len(tar_bytes)} bytes tar -> {len(compressed)} bytes (lzma)"
+        )
 
         max_chunk = cls._max_chunk_size(max_qr_bytes)
         total_parts = max(1, math.ceil(len(compressed) / max_chunk))
@@ -179,7 +181,7 @@ class MultiPartQrProcessor:
                     "data": inner["d"],
                 })
             except KeyError as e:
-                raise DecryptionError(f"Malformed part data: missing {e}")
+                raise DecryptionError(f"Malformed part data: missing {e}") from e
 
         total_parts = parts[0]["total_parts"]
         for part in parts:
@@ -201,18 +203,20 @@ class MultiPartQrProcessor:
             return lzma.decompress(compressed)
         except lzma.LZMAError as e:
             raise DecryptionError(
-                "Decompression failed. Parts may be corrupted or come from different encryption runs."
+                "Decompression failed. Parts may be corrupted "
+                "or come from different encryption runs."
             ) from e
 
     @staticmethod
-    def extract_tar(tar_bytes: bytes, output_dir: str) -> List[Path]:
+    def extract_tar(tar_bytes: bytes, output_dir: Union[str, Path]) -> List[Path]:
         """
         Safely extracts a tar archive into output_dir.
 
         Returns:
             List of extracted file paths (directories are created but not listed).
         """
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
         extracted = []
         with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r") as tar:
             members = tar.getmembers()
@@ -220,7 +224,7 @@ class MultiPartQrProcessor:
                 # Python 3.12+: sandboxes extraction against path traversal, device files, etc.
                 tar.extractall(output_dir, filter="data")
             else:
-                base = Path(output_dir).resolve()
+                base = output_dir.resolve()
                 for member in members:
                     member_path = (base / member.name).resolve()
                     if member_path != base and base not in member_path.parents:
@@ -229,13 +233,14 @@ class MultiPartQrProcessor:
 
             for member in members:
                 if member.isfile():
-                    extracted.append(Path(output_dir) / member.name)
+                    extracted.append(output_dir / member.name)
 
         logger.info(f"Extracted {len(extracted)} file(s) to {output_dir}")
         return extracted
 
 
 if __name__ == "__main__":
+    import os
     import random
     import shutil
     import tempfile
@@ -244,86 +249,88 @@ if __name__ == "__main__":
     logger.info("Test MultiPartQrProcessor")
 
     password = "test123"
-    workdir = tempfile.mkdtemp()
+    workdir = Path(tempfile.mkdtemp())
     try:
         # Single small file -> should fit in one QR code
-        small_file = os.path.join(workdir, "small.txt")
-        with open(small_file, "w") as f:
-            f.write("hello world")
+        small_file = workdir / "small.txt"
+        small_file.write_text("hello world")
 
-        qr_strings = MultiPartQrProcessor.serialize_paths([small_file], password, max_qr_bytes=2953)
+        qr_strings = MultiPartQrProcessor.serialize_paths(
+            [str(small_file)], password, max_qr_bytes=2953
+        )
         assert len(qr_strings) == 1, f"expected 1 part, got {len(qr_strings)}"
         assert all(MultiPartQrProcessor.is_valid_qr_part(q) for q in qr_strings)
 
-        out_dir = os.path.join(workdir, "out_single")
+        out_dir = workdir / "out_single"
         tar_bytes = MultiPartQrProcessor.deserialize_to_bytes(qr_strings, password)
         extracted = MultiPartQrProcessor.extract_tar(tar_bytes, out_dir)
         assert len(extracted) == 1
-        with open(extracted[0]) as f:
-            assert f.read() == "hello world"
+        assert extracted[0].read_text() == "hello world"
         logger.info("Single small file: OK")
 
         # Large file -> multi-part, shuffled reassembly.
         # Kept deliberately small: every part runs its own full Argon2i
         # derivation (~0.3s each), so a part count in the single digits is
         # plenty to exercise the multi-part path without a slow self-test.
-        large_file = os.path.join(workdir, "large.bin")
-        with open(large_file, "wb") as f:
-            f.write(os.urandom(2_500))
+        large_file = workdir / "large.bin"
+        large_file.write_bytes(os.urandom(2_500))
 
-        qr_strings = MultiPartQrProcessor.serialize_paths([large_file], password, max_qr_bytes=800)
+        qr_strings = MultiPartQrProcessor.serialize_paths(
+            [str(large_file)], password, max_qr_bytes=800
+        )
         assert len(qr_strings) > 1, "expected multiple parts for a large file"
 
         shuffled = qr_strings.copy()
         random.shuffle(shuffled)
 
-        out_dir = os.path.join(workdir, "out_large")
+        out_dir = workdir / "out_large"
         tar_bytes = MultiPartQrProcessor.deserialize_to_bytes(shuffled, password)
         extracted = MultiPartQrProcessor.extract_tar(tar_bytes, out_dir)
         assert len(extracted) == 1
-        with open(large_file, "rb") as f_in, open(extracted[0], "rb") as f_out:
-            assert f_in.read() == f_out.read()
+        assert large_file.read_bytes() == extracted[0].read_bytes()
         logger.info(f"Large file ({len(qr_strings)} parts, shuffled): OK")
 
         # Multiple files at once
-        file_a = os.path.join(workdir, "a.txt")
-        file_b = os.path.join(workdir, "b.txt")
-        with open(file_a, "w") as f:
-            f.write("file a")
-        with open(file_b, "w") as f:
-            f.write("file b")
+        file_a = workdir / "a.txt"
+        file_b = workdir / "b.txt"
+        file_a.write_text("file a")
+        file_b.write_text("file b")
 
-        qr_strings = MultiPartQrProcessor.serialize_paths([file_a, file_b], password, max_qr_bytes=2953)
-        out_dir = os.path.join(workdir, "out_multi")
+        qr_strings = MultiPartQrProcessor.serialize_paths(
+            [str(file_a), str(file_b)], password, max_qr_bytes=2953
+        )
+        out_dir = workdir / "out_multi"
         tar_bytes = MultiPartQrProcessor.deserialize_to_bytes(qr_strings, password)
         extracted = MultiPartQrProcessor.extract_tar(tar_bytes, out_dir)
         assert {p.name for p in extracted} == {"a.txt", "b.txt"}
         logger.info("Multiple files: OK")
 
         # A whole folder (nested structure)
-        folder = os.path.join(workdir, "myfolder")
-        os.makedirs(os.path.join(folder, "subdir"))
-        with open(os.path.join(folder, "root.txt"), "w") as f:
-            f.write("root file")
-        with open(os.path.join(folder, "subdir", "nested.txt"), "w") as f:
-            f.write("nested file")
+        folder = workdir / "myfolder"
+        (folder / "subdir").mkdir(parents=True)
+        (folder / "root.txt").write_text("root file")
+        (folder / "subdir" / "nested.txt").write_text("nested file")
 
-        qr_strings = MultiPartQrProcessor.serialize_paths([folder], password, max_qr_bytes=2953)
-        out_dir = os.path.join(workdir, "out_folder")
+        qr_strings = MultiPartQrProcessor.serialize_paths(
+            [str(folder)], password, max_qr_bytes=2953
+        )
+        out_dir = workdir / "out_folder"
         tar_bytes = MultiPartQrProcessor.deserialize_to_bytes(qr_strings, password)
         extracted = MultiPartQrProcessor.extract_tar(tar_bytes, out_dir)
-        extracted_relnames = {str(p.relative_to(out_dir)) for p in extracted}
+        extracted_relnames = {p.relative_to(out_dir) for p in extracted}
         assert extracted_relnames == {
-            os.path.join("myfolder", "root.txt"),
-            os.path.join("myfolder", "subdir", "nested.txt"),
+            Path("myfolder/root.txt"),
+            Path("myfolder/subdir/nested.txt"),
         }
         logger.info("Whole folder (nested): OK")
 
         # Missing parts should raise a clear error
-        qr_strings = MultiPartQrProcessor.serialize_paths([large_file], password, max_qr_bytes=800)
+        qr_strings = MultiPartQrProcessor.serialize_paths(
+            [str(large_file)], password, max_qr_bytes=800
+        )
         try:
             MultiPartQrProcessor.deserialize_to_bytes(qr_strings[:-1], password)
-            assert False, "expected ValueError for missing parts"
+            raise AssertionError("expected ValueError for missing parts")
         except ValueError as e:
             assert "Missing parts" in str(e)
         logger.info("Missing-parts detection: OK")
@@ -331,7 +338,7 @@ if __name__ == "__main__":
         # Wrong password should raise DecryptionError
         try:
             MultiPartQrProcessor.deserialize_to_bytes(qr_strings, "wrong password")
-            assert False, "expected DecryptionError for wrong password"
+            raise AssertionError("expected DecryptionError for wrong password")
         except DecryptionError:
             pass
         logger.info("Wrong-password detection: OK")

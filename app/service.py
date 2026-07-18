@@ -1,10 +1,11 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-import qrcode
 from pathlib import Path
 from typing import List, Sequence, Tuple
+
+import qrcode
 from PIL import Image
 
 from app import qr_multi_part
@@ -17,7 +18,9 @@ class QRCodeNotFoundError(Exception):
     pass
 
 
-def generate_qr_from_paths(paths: Sequence[str], password: str, max_bytes: int) -> Tuple[List[Image.Image], List[str]]:
+def generate_qr_from_paths(
+    paths: Sequence[str], password: str, max_bytes: int
+) -> Tuple[List[Image.Image], List[str]]:
     """
     Packs one or more files/directories, encrypts them and returns QR code image(s).
 
@@ -29,7 +32,9 @@ def generate_qr_from_paths(paths: Sequence[str], password: str, max_bytes: int) 
     Returns:
         (images, texts) -- always lists, length 1 if everything fits in one QR code.
     """
-    qr_strings = qr_multi_part.MultiPartQrProcessor.serialize_paths(list(paths), password, max_bytes)
+    qr_strings = qr_multi_part.MultiPartQrProcessor.serialize_paths(
+        list(paths), password, max_bytes
+    )
 
     images = []
     for i, qr_string in enumerate(qr_strings, 1):
@@ -96,10 +101,10 @@ def read_qr_from_image(filepath: str) -> str:
         logger.info("QR code successfully read with OpenCV")
         return decoded_text
 
-    except ImportError:
+    except ImportError as e:
         raise QRCodeNotFoundError(
             "No QR code reader available. Install either 'qreader' or 'opencv-python'."
-        )
+        ) from e
 
 
 def read_multiple_qr_from_images(filepaths: List[str]) -> List[str]:

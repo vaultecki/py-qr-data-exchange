@@ -19,7 +19,7 @@ Transfers files via QR codes: the input is bundled into a tar archive, compresse
 ```bash
 git clone <repository-url>
 cd py-qr-data-exchange
-pip install -r requirements.txt
+pip install .
 ```
 
 ### Minimal
@@ -27,25 +27,15 @@ pip install -r requirements.txt
 Uses OpenCV instead of `qreader` for QR detection (smaller install):
 
 ```bash
-pip install -r requirements-minimal.txt
+pip install ".[minimal]"
 ```
 
 ### Development
 
-Includes pytest and lint/type-check tools:
+Includes pytest, ruff and mypy:
 
 ```bash
-pip install -r requirements-dev.txt
-```
-
-### Manual
-
-```bash
-# with qreader (better detection)
-pip install pillow qrcode qreader pynacl msgpack
-
-# without qreader (OpenCV fallback only)
-pip install pillow qrcode opencv-python pynacl msgpack
+pip install -e ".[dev]"
 ```
 
 `lzma` and `tarfile` are part of the Python standard library; no extra package needed.
@@ -361,6 +351,15 @@ SPDX-License-Identifier: Apache-2.0
 ## Contributing
 
 Contributions are welcome. Please keep the code style consistent, make sure tests pass, and document any security-relevant changes.
+
+Set up the git hooks once after cloning (requires the `dev` extra):
+
+```bash
+pip install -e ".[dev]"
+pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+Ruff and mypy then run on every `git commit`; the full test suite runs on `git push`.
 
 ## FAQ
 

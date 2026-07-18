@@ -1,4 +1,4 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
@@ -7,8 +7,8 @@ import tkinter
 from tkinter import filedialog, messagebox
 from typing import List
 
-from app.controller import QrExchangeController
 from app import extra_windows
+from app.controller import QrExchangeController
 
 logger = logging.getLogger(__name__)
 MAX_QR_CODE_BYTES = 2953
@@ -137,7 +137,10 @@ class GuiClass:
             self._update_filename_display()
 
     def _update_filename_display(self):
-        text = self.selected_paths[0] if len(self.selected_paths) == 1 else f"{len(self.selected_paths)} items selected"
+        if len(self.selected_paths) == 1:
+            text = self.selected_paths[0]
+        else:
+            text = f"{len(self.selected_paths)} items selected"
         self.entry_filename.config(state="normal")
         self.entry_filename.delete(0, tkinter.END)
         self.entry_filename.insert(0, text)

@@ -1,13 +1,13 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import tkinter
 
 import pytest
+from helpers import pump_until
 
 from app import main as main_module
 from app.main import GuiClass
-from helpers import pump_until
 
 
 @pytest.fixture
@@ -57,7 +57,9 @@ def test_browse_files_updates_selection_and_display(gui, monkeypatch, tmp_path):
     file_b = tmp_path / "b.txt"
     file_a.write_text("a")
     file_b.write_text("b")
-    monkeypatch.setattr(main_module.filedialog, "askopenfilenames", lambda **kwargs: (str(file_a), str(file_b)))
+    monkeypatch.setattr(
+        main_module.filedialog, "askopenfilenames", lambda **kwargs: (str(file_a), str(file_b))
+    )
 
     gui.click_button_browse_files()
 
@@ -110,7 +112,10 @@ def test_click_button_generate_shows_error_on_failure(gui, monkeypatch, tmp_path
     gui.selected_paths = [str(tmp_path / "does-not-exist.txt")]
 
     shown = {}
-    monkeypatch.setattr(main_module.messagebox, "showerror", lambda title, msg: shown.update(title=title, msg=msg))
+    monkeypatch.setattr(
+        main_module.messagebox, "showerror",
+        lambda title, msg: shown.update(title=title, msg=msg)
+    )
 
     gui.click_button_generate()
 

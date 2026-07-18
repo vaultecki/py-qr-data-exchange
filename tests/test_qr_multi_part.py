@@ -1,10 +1,11 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import io
 import os
 import random
 import tarfile
+from pathlib import Path
 
 import pytest
 
@@ -75,10 +76,10 @@ def test_whole_folder_preserves_nested_structure(tmp_path, password):
     tar_bytes = MultiPartQrProcessor.deserialize_to_bytes(qr_strings, password)
     extracted = MultiPartQrProcessor.extract_tar(tar_bytes, str(out_dir))
 
-    relnames = {str(p.relative_to(out_dir)) for p in extracted}
+    relnames = {p.relative_to(out_dir) for p in extracted}
     assert relnames == {
-        os.path.join("myfolder", "root.txt"),
-        os.path.join("myfolder", "subdir", "nested.txt"),
+        Path("myfolder/root.txt"),
+        Path("myfolder/subdir/nested.txt"),
     }
 
 
@@ -134,7 +135,9 @@ def test_extract_tar_rejects_path_traversal(tmp_path):
         tar.addfile(info, io.BytesIO(payload))
 
     out_dir = tmp_path / "out"
-    with pytest.raises(Exception):
+    # ValueError on Python < 3.12 (manual check); tarfile.FilterError (3.12+ data filter) otherwise.
+    expected_errors = (ValueError, getattr(tarfile, "FilterError", ValueError))
+    with pytest.raises(expected_errors):
         MultiPartQrProcessor.extract_tar(buffer.getvalue(), str(out_dir))
 
     assert not (tmp_path / "evil.txt").exists()

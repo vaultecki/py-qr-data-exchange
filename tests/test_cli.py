@@ -1,12 +1,12 @@
-# Copyright [2025] [ecki]
+# Copyright 2025 ecki
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
 
 import pytest
+from helpers import qr_reader_available
 
 from app import cli
-from helpers import qr_reader_available
 
 
 def run_cli(monkeypatch, args):
@@ -123,7 +123,9 @@ def test_decrypt_requires_output_argument(monkeypatch, password):
         run_cli(monkeypatch, ["decrypt", "-t", "irrelevant", "-p", password])
 
 
-@pytest.mark.skipif(not qr_reader_available(), reason="no QR reader backend (qreader/opencv) installed")
+@pytest.mark.skipif(
+    not qr_reader_available(), reason="no QR reader backend (qreader/opencv) installed"
+)
 def test_generate_then_read_image_roundtrip(tmp_path, monkeypatch, password):
     f = tmp_path / "input.txt"
     f.write_text("read command roundtrip")
