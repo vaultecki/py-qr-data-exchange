@@ -1,0 +1,67 @@
+app-id: io.github.vaultecki.PyQRDataExchange
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+command: pyqrdataexchange-gui
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+
+modules:
+  # Tcl/Tk are not part of the freedesktop runtime, so they (and tkinter
+  # itself) have to be built from source. See:
+  # https://discourse.flathub.org/t/how-can-i-package-a-python-tkinter-application/3795
+  - name: tcl9.0
+    sources:
+      - type: archive
+        url: https://prdownloads.sourceforge.net/tcl/tcl9.0.2-src.tar.gz
+        sha256: e074c6a8d9ba2cddf914ba97b6677a552d7a52a3ca102924389a05ccb249b520
+    config-opts:
+      - --disable-zipfs
+    subdir: unix
+    post-install:
+      - chmod +w ${FLATPAK_DEST}/lib/libtcl9.0.so
+
+  - name: tk9.0
+    sources:
+      - type: archive
+        url: https://prdownloads.sourceforge.net/tcl/tk9.0.2-src.tar.gz
+        sha256: 76fb852b2f167592fe8b41aa6549ce4e486dbf3b259a269646600e3894517c76
+    config-opts:
+      - --disable-zipfs
+    subdir: unix
+    post-install:
+      - chmod +w ${FLATPAK_DEST}/lib/libtcl9tk9.0.so
+
+  - name: tkinter
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=${FLATPAK_DEST} --no-build-isolation .
+    sources:
+      - type: git
+        url: https://github.com/iwalton3/tkinter-standalone
+        commit: d9cb97c5bd4f814c73678366e0e48220776b6ad3
+
+  # Generated at build time from packaging/flatpak/requirements-minimal.txt
+  # via flatpak-pip-generator, see .github/workflows/release.yml.
+  - python3-requirements.json
+
+  - name: pyqrdataexchange
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=${FLATPAK_DEST} --no-build-isolation --no-deps .
+      - install -Dm644 packaging/flatpak/io.github.vaultecki.PyQRDataExchange.desktop
+        ${FLATPAK_DEST}/share/applications/io.github.vaultecki.PyQRDataExchange.desktop
+      - install -Dm644 packaging/flatpak/io.github.vaultecki.PyQRDataExchange.metainfo.xml
+        ${FLATPAK_DEST}/share/metainfo/io.github.vaultecki.PyQRDataExchange.metainfo.xml
+      - install -Dm644 packaging/icon/io.github.vaultecki.PyQRDataExchange.png
+        ${FLATPAK_DEST}/share/icons/hicolor/128x128/apps/io.github.vaultecki.PyQRDataExchange.png
+      - install -Dm644 packaging/icon/io.github.vaultecki.PyQRDataExchange.svg
+        ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/io.github.vaultecki.PyQRDataExchange.svg
+    sources:
+      - type: dir
+        path: ../..

@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install app + build tools
+        run: |
+          pip install .[minimal,dnd]
+          pip install pyinstaller
+
+      - name: Build exe
+        run: >
+          pyinstaller --onefile --windowed
+          --name PyQRDataExchange
+          --icon packaging/icon/icon.ico
+          --collect-all tkinterdnd2
+          run_app.py
+
+      - name: Rename artifact with version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mv dist/PyQRDataExchange.exe "dist/PyQRDataExchange-${version}-windows.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/PyQRDataExchange-*-windows.exe
+          if-no-files-found: error
+
+  build-flatpak:
+    name: Build Flatpak
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate pinned Python dependency sources for the Flatpak build
+        run: |
+          python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+          python3 -m pip install --quiet --user "requirements-parser<1.0.0,>=0.11.0" "packaging>=23.0"
+          curl -sL -o /tmp/flatpak-pip-generator.py \
+            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/pip/flatpak-pip-generator.py
+          python3 /tmp/flatpak-pip-generator.py \
+            --runtime org.freedesktop.Sdk//24.08 \
+            -r packaging/flatpak/requirements-minimal.txt \
+            --checker-data \
+            -o packaging/flatpak/python3-requirements
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: PyQRDataExchange.flatpak
+          manifest-path: packaging/flatpak/io.github.vaultecki.PyQRDataExchange.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+          artifact-name: flatpak-bundle
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-flatpak]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: artifacts/*

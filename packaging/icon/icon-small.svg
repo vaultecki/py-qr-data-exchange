@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="55%" stop-color="#0e7490"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#eaf4fb"/>
+      <stop offset="100%" stop-color="#bfe0f4"/>
+    </linearGradient>
+    <clipPath id="arrowClip"><path d="
+    M 130 110.0
+    L 560 110.0
+    L 560 30.0
+    L 800 300
+    L 560 570.0
+    L 560 490.0
+    L 130 490.0
+    Q 176.0 300 130 110.0
+    Z
+    "/></clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="108" fill="url(#bg)"/>
+
+  <g transform="translate(-57.70,53.61) scale(0.67463)">
+    <path d="
+    M 130 110.0
+    L 560 110.0
+    L 560 30.0
+    L 800 300
+    L 560 570.0
+    L 560 490.0
+    L 130 490.0
+    Q 176.0 300 130 110.0
+    Z
+    " fill="url(#body)" stroke="#04121f" stroke-width="20" stroke-linejoin="round"/>
+    <g clip-path="url(#arrowClip)">
+      
+    <rect x="300.0" y="150.0" width="238" height="238" rx="30.6" fill="#eaf4fb"/>
+    <rect x="300.0" y="150.0" width="238" height="238" rx="30.6" fill="none" stroke="#04121f" stroke-width="35.7"/>
+    <rect x="368.0" y="218.0" width="102" height="102" rx="17.0" fill="#04121f"/>
+    
+
+    <rect x="362.0" y="150.0" width="238" height="238" rx="30.6" fill="#eaf4fb"/>
+    <rect x="362.0" y="150.0" width="238" height="238" rx="30.6" fill="none" stroke="#04121f" stroke-width="35.7"/>
+    <rect x="430.0" y="218.0" width="102" height="102" rx="17.0" fill="#04121f"/>
+    
+
+    <rect x="300.0" y="212.0" width="238" height="238" rx="30.6" fill="#eaf4fb"/>
+    <rect x="300.0" y="212.0" width="238" height="238" rx="30.6" fill="none" stroke="#04121f" stroke-width="35.7"/>
+    <rect x="368.0" y="280.0" width="102" height="102" rx="17.0" fill="#04121f"/>
+    
+    </g>
+    <path d="
+    M 130 110.0
+    L 560 110.0
+    L 560 30.0
+    L 800 300
+    L 560 570.0
+    L 560 490.0
+    L 130 490.0
+    Q 176.0 300 130 110.0
+    Z
+    " fill="none" stroke="#04121f" stroke-width="20" stroke-linejoin="round"/>
+  </g>
+</svg>

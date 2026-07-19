@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PyQRDataExchange
+Comment=Transfer files via encrypted QR codes
+Comment[de]=Dateien über verschlüsselte QR-Codes übertragen
+Exec=pyqrdataexchange-gui
+Icon=io.github.vaultecki.PyQRDataExchange
+Categories=Utility;Security;
+Terminal=false
+StartupNotify=true

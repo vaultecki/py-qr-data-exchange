@@ -8,7 +8,7 @@ import queue
 import threading
 import tkinter
 from pathlib import Path
-from tkinter import Toplevel, filedialog, messagebox
+from tkinter import Toplevel, filedialog, messagebox, ttk
 from typing import List
 
 from PIL import Image
@@ -17,6 +17,168 @@ from app import qr_multi_part, service
 from app.controller import QrExchangeController
 
 logger = logging.getLogger(__name__)
+
+try:
+    from tkinterdnd2 import DND_FILES
+    DND_SUPPORTED = True
+except ImportError:
+    DND_FILES = None
+    DND_SUPPORTED = False
+
+
+class GenerateTab(ttk.Frame):
+    """Tab content for building and generating QR code(s) from files/folders."""
+
+    def __init__(self, master, max_qr_bytes: int = 2953):
+        super().__init__(master, padding=10)
+        logger.debug("init generate tab")
+
+        self.controller = QrExchangeController(max_qr_bytes)
+        self.selected_paths: List[str] = []
+
+        self.label_password = ttk.Label(self, text="Password:")
+        self.label_password.grid(row=0, column=0, padx=5, pady=5, sticky=tkinter.E)
+
+        self.password_var = tkinter.StringVar(self, "")
+        self.entry_password = ttk.Entry(
+            self, width=25,
+            show='*',
+            textvariable=self.password_var
+        )
+        self.entry_password.grid(row=0, column=1, padx=5, pady=5, sticky="we")
+
+        self.label_filename = ttk.Label(self, text="Files/Folder:")
+        self.label_filename.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.E)
+
+        self.entry_filename = ttk.Entry(self, width=35, state="readonly")
+        self.entry_filename.grid(row=1, column=1, padx=5, pady=5, sticky="we")
+
+        button_frame = ttk.Frame(self)
+        button_frame.grid(row=1, column=2, padx=5, pady=5)
+
+        self.button_browse_files = ttk.Button(
+            button_frame, text="Browse Files",
+            command=self.click_button_browse_files
+        )
+        self.button_browse_files.pack(side=tkinter.LEFT, padx=2)
+
+        self.button_browse_folder = ttk.Button(
+            button_frame, text="Browse Folder",
+            command=self.click_button_browse_folder
+        )
+        self.button_browse_folder.pack(side=tkinter.LEFT, padx=2)
+
+        hint_text = (
+            "...or drag & drop files/folders onto the field above"
+            if DND_SUPPORTED else ""
+        )
+        self.dnd_hint_label = ttk.Label(self, text=hint_text, foreground="gray")
+        self.dnd_hint_label.grid(row=2, column=1, padx=5, sticky="w")
+
+        self.button_generate = ttk.Button(
+            self, text="Generate QR",
+            command=self.click_button_generate
+        )
+        self.button_generate.grid(row=3, column=2, padx=5, pady=15, sticky="e")
+
+        self.columnconfigure(1, weight=1, minsize=140)
+
+        self._setup_dnd()
+
+    def _setup_dnd(self):
+        if not DND_SUPPORTED:
+            return
+        self.entry_filename.drop_target_register(DND_FILES)
+        self.entry_filename.dnd_bind('<<Drop>>', self._on_drop)
+
+    def _on_drop(self, event):
+        paths = self.tk.splitlist(event.data)
+        if paths:
+            self.selected_paths = list(paths)
+            self._update_filename_display()
+
+    def _validate_inputs(self, check_filename=True):
+        if not self.password_var.get():
+            messagebox.showerror("Error", "Please enter a password.")
+            return False
+        if check_filename and not self.selected_paths:
+            messagebox.showerror("Error", "Please select file(s) or a folder.")
+            return False
+        return True
+
+    def click_button_generate(self):
+        if not self._validate_inputs():
+            return
+
+        password = self.password_var.get()
+
+        self._disable_ui()
+
+        # generate_qr_async's on_success/on_error run on its background worker
+        # thread -- Tk/Tcl calls (including .after()) are not safe from there,
+        # so only a thread-safe queue.Queue.put() happens in the callbacks, and
+        # the actual UI update happens via polling from the main thread below.
+        result_queue = queue.Queue()
+        self.controller.generate_qr_async(
+            self.selected_paths,
+            password,
+            on_success=lambda images, texts: result_queue.put(("success", (images, texts))),
+            on_error=lambda error: result_queue.put(("error", error)),
+        )
+        self.after(100, self._poll_generate_result, result_queue)
+
+    def _poll_generate_result(self, result_queue):
+        """Runs safely on the main thread."""
+        try:
+            message_type, data = result_queue.get_nowait()
+        except queue.Empty:
+            self.after(100, self._poll_generate_result, result_queue)
+            return
+
+        self._enable_ui()
+
+        if message_type == "success":
+            qr_images, qr_texts = data
+            logger.info(f"Generate success. {len(qr_images)} QR code(s)")
+            try:
+                QrWindow(self.winfo_toplevel(), qr_images, qr_texts)
+            except Exception as e:
+                logger.error(f"Error creating QrWindow: {e}")
+                logger.exception("Full traceback:")
+                messagebox.showerror("Error", f"Could not display QR window: {e}")
+        else:
+            logger.error(f"Generate error: {data}")
+            messagebox.showerror("Error", str(data))
+
+    def click_button_browse_files(self):
+        filepaths = filedialog.askopenfilenames(filetypes=[("all files", "*.*")])
+        if filepaths:
+            self.selected_paths = list(filepaths)
+            self._update_filename_display()
+
+    def click_button_browse_folder(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.selected_paths = [folder]
+            self._update_filename_display()
+
+    def _update_filename_display(self):
+        if len(self.selected_paths) == 1:
+            text = self.selected_paths[0]
+        else:
+            text = f"{len(self.selected_paths)} items selected"
+        self.entry_filename.config(state="normal")
+        self.entry_filename.delete(0, tkinter.END)
+        self.entry_filename.insert(0, text)
+        self.entry_filename.config(state="readonly")
+
+    def _disable_ui(self):
+        self.button_generate.config(state="disabled")
+        self.winfo_toplevel().config(cursor="watch")
+
+    def _enable_ui(self):
+        self.button_generate.config(state="normal")
+        self.winfo_toplevel().config(cursor="")
 
 
 class QrWindow(Toplevel):
@@ -168,65 +330,91 @@ class QrWindow(Toplevel):
                                 f"{len(self.qr_codes)} QR codes saved to:\n{directory}")
 
 
-class ReadWindow(Toplevel):
-    def __init__(self, master, password):
-        super().__init__(master)
-        logger.info("open qr read window")
-        self.password = password
+class ReadTab(ttk.Frame):
+    """Tab content for loading QR code part(s) and decrypting/extracting them."""
+
+    def __init__(self, master):
+        super().__init__(master, padding=10)
+        logger.info("init read tab")
         # part_number -> qr_text, for parts confirmed to belong to this transfer
         self.parts_by_number = {}
         self.total_parts = None  # only known once at least one part decrypts successfully
 
-        self.title("QR Data Read")
+        # Password
+        ttk.Label(self, text="Password:").grid(row=0, column=0, padx=5, pady=5, sticky=tkinter.E)
+        self.password_var = tkinter.StringVar(self, "")
+        self.entry_password = ttk.Entry(
+            self, width=25, show='*', textvariable=self.password_var
+        )
+        self.entry_password.grid(row=0, column=1, padx=5, pady=5, sticky="w")
 
         # Text input
-        tkinter.Label(self, text="Text to add:").grid(row=0, column=0, padx=5, pady=5)
-        self.text_field = tkinter.Entry(self, width=60)
-        self.text_field.grid(row=0, column=1, padx=5, pady=5)
-        self.add_text_button = tkinter.Button(self, text="Add", command=self.click_add_text)
-        self.add_text_button.grid(row=0, column=2, padx=5, pady=5)
+        ttk.Label(self, text="Text to add:").grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.E)
+        self.text_field = ttk.Entry(self, width=50)
+        self.text_field.grid(row=1, column=1, padx=5, pady=5, sticky="we")
+        self.add_text_button = ttk.Button(self, text="Add", command=self.click_add_text)
+        self.add_text_button.grid(row=1, column=2, padx=5, pady=5)
 
         # Multi-part section
-        multipart_frame = tkinter.LabelFrame(self, text="Loaded Parts", padx=5, pady=5)
-        multipart_frame.grid(row=1, column=0, columnspan=3, padx=5, pady=5, sticky="ew")
+        self.multipart_frame = ttk.Labelframe(self, text="Loaded Parts", padding=8)
+        self.multipart_frame.grid(row=2, column=0, columnspan=3, padx=5, pady=10, sticky="we")
 
-        self.add_files_button = tkinter.Button(multipart_frame, text="Add QR Code File(s)",
-                                               command=self.add_qr_image)
+        self.add_files_button = ttk.Button(self.multipart_frame, text="Add QR Code File(s)",
+                                           command=self.add_qr_image)
         self.add_files_button.pack(side=tkinter.LEFT, padx=5)
 
-        self.status_label = tkinter.Label(multipart_frame, text="0 parts loaded")
+        self.status_label = ttk.Label(self.multipart_frame, text="0 parts loaded")
         self.status_label.pack(side=tkinter.LEFT, padx=10)
 
-        self.clear_button = tkinter.Button(multipart_frame, text="Clear List",
-                                           command=self.clear_qr_list)
+        self.clear_button = ttk.Button(self.multipart_frame, text="Clear List",
+                                       command=self.clear_qr_list)
         self.clear_button.pack(side=tkinter.LEFT, padx=5)
 
+        dnd_hint_text = "...or drag & drop QR image/text files here" if DND_SUPPORTED else ""
+        self.dnd_hint_label = ttk.Label(self, text=dnd_hint_text, foreground="gray")
+        self.dnd_hint_label.grid(row=3, column=1, padx=5, sticky="w")
+
         # Decrypt button -- stays disabled until every part of the transfer is loaded
-        self.decrypt_button = tkinter.Button(
+        self.decrypt_button = ttk.Button(
             self, text="Decrypt and Extract to Folder",
             command=self.on_click_decrypt, state="disabled"
         )
-        self.decrypt_button.grid(row=2, column=2, padx=5, pady=5)
+        self.decrypt_button.grid(row=4, column=2, padx=5, pady=10)
+
+        self.columnconfigure(1, weight=1, minsize=140)
 
         self.decrypt_result_queue = queue.Queue()
         self.text_add_queue = queue.Queue()
         self.file_add_queue = queue.Queue()
         self._destroyed = False
 
-        self.transient(master)
-        self.grab_set()
+        self._setup_dnd()
+
+    def _setup_dnd(self):
+        if not DND_SUPPORTED:
+            return
+        self.multipart_frame.drop_target_register(DND_FILES)
+        self.multipart_frame.dnd_bind('<<Drop>>', self._on_drop_files)
+
+    def _on_drop_files(self, event):
+        filepaths = self.tk.splitlist(event.data)
+        if filepaths:
+            self._start_adding_files(list(filepaths))
 
     def destroy(self):
-        # Background add/decrypt workers keep running after the window closes and
-        # schedule self.after(...) poll callbacks; this flag lets those callbacks
+        # Background add/decrypt workers keep running after the tab's window closes
+        # and schedule self.after(...) poll callbacks; this flag lets those callbacks
         # bail out instead of touching widgets that no longer exist.
         self._destroyed = True
         super().destroy()
 
-    def _try_add_part(self, qr_text: str) -> str:
+    def _try_add_part(self, qr_text: str, password: str) -> str:
         """
         Attempts to decrypt and record a single QR part. Runs the (comparatively
         expensive, full-Argon2i) decryption, so call this off the main thread.
+
+        `password` must be captured on the main thread beforehand (StringVar.get()
+        is a Tk/Tcl call and isn't safe from a background thread).
 
         Returns an empty string on success (including a harmless re-add of an
         already-loaded part), or an error message describing why the part was
@@ -237,7 +425,7 @@ class ReadWindow(Toplevel):
             return "Empty text"
 
         try:
-            part_number, total_parts = QrExchangeController.get_part_info(qr_text, self.password)
+            part_number, total_parts = QrExchangeController.get_part_info(qr_text, password)
         except qr_multi_part.DecryptionError as e:
             return f"Cannot decrypt: {e}"
         except Exception as e:
@@ -281,7 +469,7 @@ class ReadWindow(Toplevel):
         self.add_text_button.config(state=state)
         self.add_files_button.config(state=state)
         self.clear_button.config(state=state)
-        self.config(cursor="watch" if busy else "")
+        self.winfo_toplevel().config(cursor="watch" if busy else "")
         if busy:
             self.decrypt_button.config(state="disabled")
 
@@ -297,18 +485,20 @@ class ReadWindow(Toplevel):
         else:
             candidates = [text]
 
+        password = self.password_var.get()
+
         self.text_field.delete(0, tkinter.END)
         self._set_busy(True)
 
         threading.Thread(
             target=self._add_text_worker,
-            args=(candidates, self.text_add_queue),
+            args=(candidates, password, self.text_add_queue),
             daemon=True
         ).start()
         self.after(100, self._poll_text_add_result)
 
-    def _add_text_worker(self, candidates, q):
-        errors = [error for error in (self._try_add_part(c) for c in candidates) if error]
+    def _add_text_worker(self, candidates, password, q):
+        errors = [error for error in (self._try_add_part(c, password) for c in candidates) if error]
         q.put(errors)
 
     def _poll_text_add_result(self):
@@ -349,17 +539,23 @@ class ReadWindow(Toplevel):
         if not filepaths:
             return
 
+        self._start_adding_files(list(filepaths))
+
+    def _start_adding_files(self, filepaths: List[str]):
+        """Kicks off the background worker that reads/decrypts the given files."""
+        password = self.password_var.get()
+
         self._set_busy(True)
         self.status_label.config(text=f"Loading {len(filepaths)} file(s)...")
 
         threading.Thread(
             target=self._add_files_worker,
-            args=(list(filepaths), self.file_add_queue),
+            args=(filepaths, password, self.file_add_queue),
             daemon=True
         ).start()
         self.after(100, self._poll_file_add_result)
 
-    def _add_files_worker(self, filepaths, q):
+    def _add_files_worker(self, filepaths, password, q):
         loaded_count = 0
         errors = []
 
@@ -368,7 +564,7 @@ class ReadWindow(Toplevel):
                 logger.info(f"Reading QR code: {filepath}")
                 qr_text = self._read_qr_text_from_file(filepath)
 
-                error = self._try_add_part(qr_text)
+                error = self._try_add_part(qr_text, password)
                 if error:
                     raise ValueError(error)
 
@@ -426,7 +622,7 @@ class ReadWindow(Toplevel):
             target=self.on_click_decrypt_thread_worker,
             args=(
                 list(self.parts_by_number.values()),
-                self.password, output_dir, self.decrypt_result_queue,
+                self.password_var.get(), output_dir, self.decrypt_result_queue,
             ),
             daemon=True
         ).start()

@@ -39,17 +39,18 @@ def _multi_part_texts(tmp_path, password, size=2500, max_qr_bytes=800):
 
 def test_try_add_part_tracks_progress_and_gates_decrypt_button(tk_root, tmp_path, password):
     texts = _multi_part_texts(tmp_path, password)
-    rw = extra_windows.ReadWindow(tk_root, password)
+    rw = extra_windows.ReadTab(tk_root)
+    rw.password_var.set(password)
 
     for text in texts[:-1]:
-        assert rw._try_add_part(text) == ""
+        assert rw._try_add_part(text, password) == ""
     rw._update_status()
-    assert rw.decrypt_button.cget("state") == "disabled"
+    assert str(rw.decrypt_button.cget("state")) == "disabled"
     assert rw.status_label.cget("text") == f"{len(texts) - 1}/{len(texts)} parts loaded"
 
-    assert rw._try_add_part(texts[-1]) == ""
+    assert rw._try_add_part(texts[-1], password) == ""
     rw._update_status()
-    assert rw.decrypt_button.cget("state") == "normal"
+    assert str(rw.decrypt_button.cget("state")) == "normal"
     assert rw.status_label.cget("text") == f"{len(texts)}/{len(texts)} parts loaded"
 
     rw.destroy()
@@ -57,10 +58,11 @@ def test_try_add_part_tracks_progress_and_gates_decrypt_button(tk_root, tmp_path
 
 def test_try_add_part_ignores_exact_duplicate(tk_root, tmp_path, password):
     texts = _multi_part_texts(tmp_path, password)
-    rw = extra_windows.ReadWindow(tk_root, password)
+    rw = extra_windows.ReadTab(tk_root)
+    rw.password_var.set(password)
 
-    assert rw._try_add_part(texts[0]) == ""
-    assert rw._try_add_part(texts[0]) == ""  # re-adding the same part is a silent no-op
+    assert rw._try_add_part(texts[0], password) == ""
+    assert rw._try_add_part(texts[0], password) == ""  # re-adding the same part is a silent no-op
     assert len(rw.parts_by_number) == 1
 
     rw.destroy()
@@ -77,10 +79,11 @@ def test_try_add_part_rejects_same_number_different_content(tk_root, tmp_path, p
     _, texts_b = service.generate_qr_from_paths([str(file_b)], password, max_bytes=2953)
     assert texts_a[0] != texts_b[0]
 
-    rw = extra_windows.ReadWindow(tk_root, password)
-    assert rw._try_add_part(texts_a[0]) == ""
+    rw = extra_windows.ReadTab(tk_root)
+    rw.password_var.set(password)
+    assert rw._try_add_part(texts_a[0], password) == ""
 
-    error = rw._try_add_part(texts_b[0])
+    error = rw._try_add_part(texts_b[0], password)
     assert error
     assert "different transfer" in error
     assert len(rw.parts_by_number) == 1  # the conflicting part must not silently overwrite/merge
@@ -98,10 +101,11 @@ def test_try_add_part_rejects_inconsistent_total_parts(tk_root, tmp_path, passwo
     _, large_texts = service.generate_qr_from_paths([str(large)], password, max_bytes=800)
     assert len(large_texts) > 1
 
-    rw = extra_windows.ReadWindow(tk_root, password)
-    assert rw._try_add_part(small_texts[0]) == ""
+    rw = extra_windows.ReadTab(tk_root)
+    rw.password_var.set(password)
+    assert rw._try_add_part(small_texts[0], password) == ""
 
-    error = rw._try_add_part(large_texts[0])
+    error = rw._try_add_part(large_texts[0], password)
     assert "different transfer" in error
 
     rw.destroy()
@@ -112,9 +116,10 @@ def test_try_add_part_rejects_wrong_password_and_garbage(tk_root, tmp_path, pass
     f.write_text("secret")
     _, texts = service.generate_qr_from_paths([str(f)], password, max_bytes=2953)
 
-    rw = extra_windows.ReadWindow(tk_root, "wrong-password")
-    assert rw._try_add_part(texts[0]) != ""
-    assert rw._try_add_part("not a real qr string") != ""
+    rw = extra_windows.ReadTab(tk_root)
+    rw.password_var.set("wrong-password")
+    assert rw._try_add_part(texts[0], "wrong-password") != ""
+    assert rw._try_add_part("not a real qr string", "wrong-password") != ""
 
     rw.destroy()
 
@@ -127,20 +132,21 @@ def test_read_qr_text_from_file_handles_txt_files(tmp_path, password):
     txt_path = tmp_path / "qr_part_1_of_1.txt"
     txt_path.write_text(texts[0])
 
-    assert extra_windows.ReadWindow._read_qr_text_from_file(str(txt_path)) == texts[0]
+    assert extra_windows.ReadTab._read_qr_text_from_file(str(txt_path)) == texts[0]
 
 
 def test_clear_qr_list_resets_state(tk_root, tmp_path, password):
     texts = _multi_part_texts(tmp_path, password)
-    rw = extra_windows.ReadWindow(tk_root, password)
-    rw._try_add_part(texts[0])
+    rw = extra_windows.ReadTab(tk_root)
+    rw.password_var.set(password)
+    rw._try_add_part(texts[0], password)
     rw._update_status()
     assert rw.parts_by_number
 
     rw.clear_qr_list()
     assert rw.parts_by_number == {}
     assert rw.total_parts is None
-    assert rw.decrypt_button.cget("state") == "disabled"
+    assert str(rw.decrypt_button.cget("state")) == "disabled"
     assert rw.status_label.cget("text") == "0 parts loaded"
 
     rw.destroy()
@@ -148,13 +154,14 @@ def test_clear_qr_list_resets_state(tk_root, tmp_path, password):
 
 def test_click_add_text_runs_in_background_and_updates_ui(tk_root, tmp_path, password):
     texts = _multi_part_texts(tmp_path, password)
-    rw = extra_windows.ReadWindow(tk_root, password)
+    rw = extra_windows.ReadTab(tk_root)
+    rw.password_var.set(password)
 
     rw.text_field.insert(0, texts[0])
     rw.click_add_text()
-    assert rw.add_text_button.cget("state") == "disabled"  # busy immediately after click
+    assert str(rw.add_text_button.cget("state")) == "disabled"  # busy immediately after click
 
-    assert pump_until(tk_root, lambda: rw.add_text_button.cget("state") == "normal")
+    assert pump_until(tk_root, lambda: str(rw.add_text_button.cget("state")) == "normal")
     assert rw.status_label.cget("text") == f"1/{len(texts)} parts loaded"
     assert rw.text_field.get() == ""  # field is cleared after adding
 
@@ -174,12 +181,13 @@ def test_add_qr_image_reads_txt_files_via_file_dialog(tk_root, tmp_path, monkeyp
         extra_windows.filedialog, "askopenfilenames", lambda **kwargs: tuple(txt_paths)
     )
 
-    rw = extra_windows.ReadWindow(tk_root, password)
+    rw = extra_windows.ReadTab(tk_root)
+    rw.password_var.set(password)
     rw.add_qr_image()
-    assert rw.add_files_button.cget("state") == "disabled"
+    assert str(rw.add_files_button.cget("state")) == "disabled"
 
-    assert pump_until(tk_root, lambda: rw.add_files_button.cget("state") == "normal")
+    assert pump_until(tk_root, lambda: str(rw.add_files_button.cget("state")) == "normal")
     assert rw.status_label.cget("text") == f"{len(texts)}/{len(texts)} parts loaded"
-    assert rw.decrypt_button.cget("state") == "normal"
+    assert str(rw.decrypt_button.cget("state")) == "normal"
 
     rw.destroy()

@@ -14,6 +14,16 @@ Transfers files via QR codes: the input is bundled into a tar archive, compresse
 
 ## Installation
 
+### Prebuilt binaries
+
+Each [GitHub release](https://github.com/vaultecki/py-qr-data-exchange/releases) ships a
+standalone Windows `.exe` and a Linux `.flatpak` bundle of the GUI -- no Python setup required.
+Install the Flatpak with:
+
+```bash
+flatpak install PyQRDataExchange.flatpak
+```
+
 ### Standard
 
 ```bash
@@ -29,6 +39,17 @@ Uses OpenCV instead of `qreader` for QR detection (smaller install):
 ```bash
 pip install ".[minimal]"
 ```
+
+### Drag & drop (optional)
+
+Adds drag & drop of files/folders/QR codes onto the GUI, via `tkinterdnd2`:
+
+```bash
+pip install ".[dnd]"
+```
+
+Without it, the GUI works exactly the same, just without the drop zones -- the Browse buttons
+always work regardless.
 
 ### Development
 
@@ -66,13 +87,20 @@ python -m app.cli read -i qrcode.png -o restored/
 
 ## GUI usage
 
+The main window has two tabs, "QR erstellen" (generate) and "QR einlesen" (read) -- each keeps
+its own password field, so switching tabs never mixes up which password applies to which action.
+Generating still opens a separate window for the resulting QR code(s), so it can be browsed and
+saved without losing your place in the main window.
+
 ### Encrypting files/folders to QR codes
 
-1. Start the app: `python run_app.py`
+1. Start the app: `python run_app.py`, "QR erstellen" tab.
 2. Enter a password (required; no length limit).
 3. Select input:
    - "Browse Files": one or more files (multi-select supported)
    - "Browse Folder": a whole directory, added recursively
+   - or drag & drop files/folders directly onto the field (requires `tkinterdnd2`, see
+     [Installation](#drag--drop-optional))
 4. Click "Generate QR". Each QR code involves its own key derivation, so payloads needing many QR codes take correspondingly longer than a single one.
 5. A navigation window opens (used the same way for one part or many):
    - "◄ Previous" / "Next ►" to browse parts
@@ -81,14 +109,14 @@ python -m app.cli read -i qrcode.png -o restored/
 
 ### Decrypting QR codes
 
-1. Enter the password used for encryption.
-2. Click "Read QR Code(s)".
-3. Add parts in any order:
+1. Switch to the "QR einlesen" tab and enter the password used for encryption.
+2. Add parts in any order:
    - "Add QR Code File(s)": select QR code images (`.png`/`.jpg`) and/or `.txt` files from "Save All"; multi-select supported.
+   - Or drag & drop QR code image/text files onto the "Loaded Parts" area (requires `tkinterdnd2`).
    - Or paste a QR code's text into the text field and click "Add". Multiple concatenated texts (base64 blobs ending in `==`) are split automatically.
    - The status label shows "X/Y parts loaded" once at least one part has decrypted (Y is only known at that point, since it's encrypted).
-4. "Decrypt and Extract to Folder" is enabled once all parts 1..Y are loaded.
-5. Click it and choose an output folder; all recovered files and folder structure are extracted there.
+3. "Decrypt and Extract to Folder" is enabled once all parts 1..Y are loaded.
+4. Click it and choose an output folder; all recovered files and folder structure are extracted there.
 
 A part that fails to decrypt (wrong password, corrupted, or from a different transfer) is rejected with an explanation when added, rather than only failing at the final decrypt step.
 
@@ -306,9 +334,9 @@ python -m app.cli read -i archive_part*.png -o restored/
 
 ### GUI workflow
 
-Encrypt: start `run_app.py` -> enter password -> "Browse Files"/"Browse Folder" -> "Generate QR" -> "Save All" -> share the images.
+Encrypt: start `run_app.py` -> "QR erstellen" tab -> enter password -> "Browse Files"/"Browse Folder" (or drag & drop) -> "Generate QR" -> "Save All" -> share the images.
 
-Decrypt: start `run_app.py` -> enter the same password -> "Read QR Code(s)" -> "Add QR Code File(s)" for each part -> once "N/N parts loaded" is shown, click "Decrypt and Extract to Folder" -> choose output folder.
+Decrypt: start `run_app.py` -> "QR einlesen" tab -> enter the same password -> "Add QR Code File(s)" (or drag & drop) for each part -> once "N/N parts loaded" is shown, click "Decrypt and Extract to Folder" -> choose output folder.
 
 ## Development
 
@@ -317,13 +345,13 @@ Decrypt: start `run_app.py` -> enter the same password -> "Read QR Code(s)" -> "
 ```
 py-qr-data-exchange/
 ├── app/
-│   ├── main.py              # GUI application
+│   ├── main.py              # GUI application (main window, tabs)
 │   ├── cli.py               # command-line interface
 │   ├── controller.py        # GUI controller (background threads)
 │   ├── service.py           # QR generation/reading orchestration
 │   ├── qr_multi_part.py     # packaging, per-part encryption, reassembly, tar extraction
 │   ├── crypt_utils.py       # Argon2i + NaCl SecretBox
-│   └── extra_windows.py     # GUI windows
+│   └── extra_windows.py     # GUI tabs (GenerateTab, ReadTab) and the QR result window
 ├── tests/                   # pytest suite
 ├── run_app.py                # application entry point
 └── README.md

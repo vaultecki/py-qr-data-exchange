@@ -64,4 +64,9 @@ target/
 
 # project specific
 *.png
+!packaging/icon/*.png
+
+# generated at release-build time, see .github/workflows/release.yml
+packaging/flatpak/python3-requirements.json
+packaging/flatpak/*.zip
 
