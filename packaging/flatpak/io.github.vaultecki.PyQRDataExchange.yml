@@ -25,6 +25,10 @@ modules:
     subdir: unix
     post-install:
       - chmod +w ${FLATPAK_DEST}/lib/libtcl9.0.so
+      # Tcl 9 (TIP 538) no longer installs libtommath's public header, but
+      # tclTomMath.h (used by _tkinter.c) needs it. Install it manually from
+      # the bundled copy.
+      - install -Dm644 ../libtommath/tommath.h ${FLATPAK_DEST}/include/tommath.h
 
   - name: tk9.0
     sources:
