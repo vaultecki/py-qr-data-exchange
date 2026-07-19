@@ -62,6 +62,8 @@ jobs:
           python3 /tmp/flatpak-pip-generator.py \
             --runtime org.freedesktop.Sdk//24.08 \
             -r packaging/flatpak/requirements-minimal.txt \
+            --prefer-wheels Pillow,opencv-python-headless,PyNaCl,msgpack,numpy,cffi \
+            --wheel-arches x86_64 \
             --checker-data \
             -o packaging/flatpak/python3-requirements
 
